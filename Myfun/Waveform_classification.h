@@ -1,5 +1,5 @@
-#ifndef __CALCULATE_H__
-#define __CALCULATE_H__
+#ifndef __Waveform_classification_H__
+#define __Waveform_classification_H__
 
 #include "FFT.h"
 #include "math.h"
