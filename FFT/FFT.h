@@ -5,7 +5,6 @@
 #include "main.h"
 #include "usart.h"
 #include "HMI.h"
-#include "AD9833.h"
 
 typedef struct
 {

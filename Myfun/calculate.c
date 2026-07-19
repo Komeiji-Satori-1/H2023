@@ -1,7 +1,4 @@
 #include "calculate.h"
-#include "AD9833.h"
-#include "iir.h"
-#include "modify_adc.h"
 
 extern void Start_ADC_Capture(void);
 extern uint16_t ADC1_IN[ADC_LEN];
@@ -586,7 +583,6 @@ uint8_t get_learn_done(void)
     return learn_done;
 }
 
-const digital_coef *calculate_get_digital_coef(void)
 {
     return &digital_coef_data;
 }
