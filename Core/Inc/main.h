@@ -65,7 +65,7 @@ void Error_Handler(void);
 #define DAC_B_Pin GPIO_PIN_5
 #define DAC_B_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
-#define ADC_LEN 1500
+#define ADC_LEN 2048
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

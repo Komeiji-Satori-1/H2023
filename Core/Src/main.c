@@ -53,6 +53,8 @@
 /* USER CODE BEGIN PV */
 #define TIM8_COUNTER_CLK_HZ 240000000
 
+volatile uint8_t adc_half_ready = 0;
+volatile uint8_t adc_full_ready = 0;
 uint16_t ADC_C[ADC_LEN] = {0};
 uint8_t ADC_flag = 0;
 /* USER CODE END PV */
@@ -114,11 +116,9 @@ int main(void)
     /* USER CODE BEGIN WHILE */
     while (1)
     {
-      if(ADC_flag == 1U){
-        for(uint16_t i = 0; i < ADC_LEN; i++){
-            printf("%d\n", ADC_C[i]);
-        }
-      }
+        My_Usart_Init();
+        State_Proc();
+   
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -185,14 +185,20 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc == &hadc1)
+    {
+        adc_half_ready = 1;
+    }
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc == &hadc1)
     {
-        HAL_ADC_Stop_DMA(hadc);
-        ADC_flag = 1U;
+        adc_full_ready = 1;
     }
- 
 }
 /* USER CODE END 4 */
 
