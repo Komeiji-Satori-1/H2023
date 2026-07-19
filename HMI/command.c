@@ -4,10 +4,7 @@
 #define HMI_FRAME_HEAD_A1 0xA1
 #define HMI_FRAME_HEAD_A2 0xA2
 #define HMI_FRAME_HEAD_A3 0xA3
-#define HMI_FRAME_HEAD_A4 0xA4
-#define HMI_FRAME_HEAD_A5 0xA5
-#define HMI_FRAME_HEAD_A6 0xA6
-#define HMI_FRAME_HEAD_A7 0xA7
+
 
 #define HMI_FRAME_LEN 5
 
@@ -24,18 +21,12 @@ static uint8_t hmi_rx_chunk[HMI_RX_CHUNK_SIZE];
 volatile uint8_t hmi_a1_update_flag = 0;
 volatile uint8_t hmi_a2_update_flag = 0;
 volatile uint8_t hmi_a3_update_flag = 0;
-volatile uint8_t hmi_a4_update_flag = 0;
-volatile uint8_t hmi_a5_update_flag = 0;
-volatile uint8_t hmi_a6_update_flag = 0;
-volatile uint8_t hmi_a7_update_flag = 0;
+
 
 volatile uint32_t hmi_a1_value = 0;
 volatile uint32_t hmi_a2_value = 0;
 volatile uint32_t hmi_a3_value = 0;
-volatile uint32_t hmi_a4_value = 0;
-volatile uint32_t hmi_a5_value = 0;
-volatile uint32_t hmi_a6_value = 0;
-volatile uint32_t hmi_a7_value = 0;
+
 
 static uint8_t HMI_IsFrameHead(uint8_t data)
 {
@@ -44,10 +35,6 @@ static uint8_t HMI_IsFrameHead(uint8_t data)
     case HMI_FRAME_HEAD_A1:
     case HMI_FRAME_HEAD_A2:
     case HMI_FRAME_HEAD_A3:
-    case HMI_FRAME_HEAD_A4:
-    case HMI_FRAME_HEAD_A5:
-    case HMI_FRAME_HEAD_A6:
-    case HMI_FRAME_HEAD_A7:
         return 1;
 
     default:
@@ -218,24 +205,6 @@ void Usart_Rx_Proc(void)
         case HMI_FRAME_HEAD_A3:
             hmi_a3_value = value;
             hmi_a3_update_flag = 1;
-            break;
-
-        case HMI_FRAME_HEAD_A4:
-            hmi_a4_value = value;
-            hmi_a4_update_flag = 1;
-            break;
-
-        case HMI_FRAME_HEAD_A5:
-            hmi_a5_update_flag = 1;
-            break;
-
-        case HMI_FRAME_HEAD_A6:
-            hmi_a6_update_flag = 1;
-            break;
-
-        case HMI_FRAME_HEAD_A7:
-            hmi_a7_value = value;
-            hmi_a7_update_flag = 1;
             break;
 
         default:
