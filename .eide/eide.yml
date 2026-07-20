@@ -85,12 +85,21 @@ virtualFolder:
         - path: HMI/HMI.c
         - path: HMI/HMI.h
       folders: []
+    - name: AD9833
+      files:
+        - path: AD9833/AD9833.c
+        - path: AD9833/AD9833.h
+      folders: []
     - name: Myfun
       files:
         - path: Myfun/calculate.c
         - path: Myfun/calculate.h
         - path: Myfun/state.c
         - path: Myfun/state.h
+        - path: Myfun/pid.c
+        - path: Myfun/pid.h
+        - path: Myfun/ad9833_fll.c
+        - path: Myfun/ad9833_fll.h
         - path: Myfun/dac_nco.c
         - path: Myfun/dac_nco.h
         - path: Myfun/Waveform_classification.c
@@ -120,6 +129,7 @@ targets:
         - FFT
         - HMI
         - Myfun
+        - AD9833
         - Drivers/CMSIS/DSP/Include
         - .cmsis/include
         - MDK-ARM/RTE/_23H
