@@ -23,9 +23,11 @@
 #define DAC_NCO_PLL_PHASE_KP_SHIFT 1U
 #define DAC_NCO_PLL_STEP_KP_DIV 20U
 #define DAC_NCO_PLL_STEP_KI_DIV 200U
+#define DAC_NCO_PLL_STEP_KD_DIV 0U
 #define DAC_NCO_PLL_MAX_CORR_DIV 2000U
 #define DAC_NCO_PLL_INTEGRATOR_LIMIT 8589934592LL
 #define DAC_NCO_PLL_INTEGRATOR_LEAK_NUM 65535LL
+#define DAC_NCO_PLL_PHASE_DEADBAND_Q32 3000000L
 
 extern float fs;
 
@@ -362,12 +364,7 @@ static void DacNco_InitPll(uint8_t ch, const SignalInfo *sig)
     s_pll[ch].last_error = 0;
 }
 
-/*
- * 限制 PLL 对相位步进的修正量。
- * 修正量最大为 nominal_inc / DAC_NCO_PLL_MAX_CORR_DIV，
- * 防止异常相位测量导致 NCO 频率被一次性拉偏太多。
- */
-static int32_t DacNco_LimitCorrection(uint8_t ch, int64_t correction)
+static int32_t DacNco_MaxCorrection(uint8_t ch)
 {
     int32_t max_corr;
 
@@ -382,6 +379,18 @@ static int32_t DacNco_LimitCorrection(uint8_t ch, int64_t correction)
         max_corr = 1;
     }
 
+    return max_corr;
+}
+
+/*
+ * 限制 PLL 对相位步进的修正量。
+ * 修正量最大为 nominal_inc / DAC_NCO_PLL_MAX_CORR_DIV，
+ * 防止异常相位测量导致 NCO 频率被一次性拉偏太多。
+ */
+static int32_t DacNco_LimitCorrection(uint8_t ch, int64_t correction)
+{
+    int32_t max_corr = DacNco_MaxCorrection(ch);
+
     if (correction > (int64_t)max_corr)
     {
         correction = max_corr;
@@ -392,6 +401,79 @@ static int32_t DacNco_LimitCorrection(uint8_t ch, int64_t correction)
     }
 
     return (int32_t)correction;
+}
+
+static int32_t DacNco_ApplyPhaseDeadband(int32_t phase_error)
+{
+    if (phase_error > (int32_t)DAC_NCO_PLL_PHASE_DEADBAND_Q32)
+    {
+        return phase_error - (int32_t)DAC_NCO_PLL_PHASE_DEADBAND_Q32;
+    }
+
+    if (phase_error < -(int32_t)DAC_NCO_PLL_PHASE_DEADBAND_Q32)
+    {
+        return phase_error + (int32_t)DAC_NCO_PLL_PHASE_DEADBAND_Q32;
+    }
+
+    return 0;
+}
+
+static int64_t DacNco_LimitIntegrator(int64_t integrator, int32_t max_corr)
+{
+    int64_t integrator_limit;
+
+    integrator_limit = (int64_t)max_corr *
+                       (int64_t)DAC_NCO_PLL_FRAME_LEN *
+                       (int64_t)DAC_NCO_PLL_STEP_KI_DIV;
+
+    if (integrator_limit > DAC_NCO_PLL_INTEGRATOR_LIMIT)
+    {
+        integrator_limit = DAC_NCO_PLL_INTEGRATOR_LIMIT;
+    }
+
+    if (integrator > integrator_limit)
+    {
+        return integrator_limit;
+    }
+
+    if (integrator < -integrator_limit)
+    {
+        return -integrator_limit;
+    }
+
+    return integrator;
+}
+
+static int32_t DacNco_PidStepCorrection(uint8_t ch, int32_t phase_error)
+{
+    int32_t max_corr;
+    int64_t integrator;
+    int64_t correction;
+
+    if (ch >= 2U)
+    {
+        return 0;
+    }
+
+    max_corr = DacNco_MaxCorrection(ch);
+    integrator = ((s_pll[ch].integrator * DAC_NCO_PLL_INTEGRATOR_LEAK_NUM) / 65536LL) +
+                 (int64_t)phase_error;
+    integrator = DacNco_LimitIntegrator(integrator, max_corr);
+
+    correction = ((int64_t)phase_error /
+                  (int64_t)(DAC_NCO_PLL_FRAME_LEN * DAC_NCO_PLL_STEP_KP_DIV)) +
+                 (integrator /
+                  (int64_t)(DAC_NCO_PLL_FRAME_LEN * DAC_NCO_PLL_STEP_KI_DIV));
+
+#if (DAC_NCO_PLL_STEP_KD_DIV != 0U)
+    correction += ((int64_t)(phase_error - s_pll[ch].last_error) /
+                   (int64_t)(DAC_NCO_PLL_FRAME_LEN * DAC_NCO_PLL_STEP_KD_DIV));
+#endif
+
+    s_pll[ch].integrator = integrator;
+    s_pll[ch].last_error = phase_error;
+
+    return DacNco_LimitCorrection(ch, correction);
 }
 
 /*
@@ -550,17 +632,13 @@ void DacNco_UpdateComponent(uint8_t ch, const SignalInfo *sig)
  * measured_phase_rad 是当前帧测得的相位；
  * frame_start_sample 是该帧第一个 ADC 采样点的绝对编号。
  * 函数会比较“测得相位”和“NCO 预测相位”，得到相位误差，
- * 再用比例项和积分项微调 phase_ref 与 inc_corr。
+ * 再用 PID 风格的环路滤波器微调 phase_ref 与 inc_corr。
  */
 void DacNco_PllUpdate(uint8_t ch, float measured_phase_rad, uint64_t frame_start_sample)
 {
     uint32_t measured_phase;
     uint32_t predicted_phase;
     int32_t phase_error;
-    int64_t integrator;
-    int64_t integrator_limit;
-    int64_t correction;
-    int32_t max_corr;
 
     if ((!s_ready) || (ch >= 2U))
     {
@@ -570,45 +648,13 @@ void DacNco_PllUpdate(uint8_t ch, float measured_phase_rad, uint64_t frame_start
     measured_phase = DacNco_RadToPhaseQ32(measured_phase_rad);
     predicted_phase = DacNco_PhaseAtSample(ch, frame_start_sample);
     phase_error = (int32_t)(measured_phase - predicted_phase);
+    phase_error = DacNco_ApplyPhaseDeadband(phase_error);
 
-    max_corr = (int32_t)(s_pll[ch].nominal_inc / DAC_NCO_PLL_MAX_CORR_DIV);
-    if (max_corr < 1)
-    {
-        max_corr = 1;
-    }
-
-    integrator = ((s_pll[ch].integrator * DAC_NCO_PLL_INTEGRATOR_LEAK_NUM) / 65536LL) +
-                 (int64_t)phase_error;
-    integrator_limit = (int64_t)max_corr *
-                       (int64_t)DAC_NCO_PLL_FRAME_LEN *
-                       (int64_t)DAC_NCO_PLL_STEP_KI_DIV;
-
-    if (integrator_limit > DAC_NCO_PLL_INTEGRATOR_LIMIT)
-    {
-        integrator_limit = DAC_NCO_PLL_INTEGRATOR_LIMIT;
-    }
-
-    if (integrator > integrator_limit)
-    {
-        integrator = integrator_limit;
-    }
-    else if (integrator < -integrator_limit)
-    {
-        integrator = -integrator_limit;
-    }
-
-    correction = ((int64_t)phase_error /
-                  (int64_t)(DAC_NCO_PLL_FRAME_LEN * DAC_NCO_PLL_STEP_KP_DIV)) +
-                 (integrator /
-                  (int64_t)(DAC_NCO_PLL_FRAME_LEN * DAC_NCO_PLL_STEP_KI_DIV));
-
-    s_pll[ch].integrator = integrator;
-    s_pll[ch].inc_corr = DacNco_LimitCorrection(ch, correction);
+    s_pll[ch].inc_corr = DacNco_PidStepCorrection(ch, phase_error);
     s_pll[ch].phase_ref = predicted_phase +
                           (uint32_t)(phase_error /
                                      (int32_t)(1UL << DAC_NCO_PLL_PHASE_KP_SHIFT));
     s_pll[ch].sample_ref = frame_start_sample;
-    s_pll[ch].last_error = phase_error;
 }
 
 /*

@@ -91,6 +91,8 @@ virtualFolder:
         - path: Myfun/calculate.h
         - path: Myfun/state.c
         - path: Myfun/state.h
+        - path: Myfun/dac_nco.c
+        - path: Myfun/dac_nco.h
         - path: Myfun/Waveform_classification.c
         - path: Myfun/Waveform_classification.h
         - path: Myfun/dac_nco.c
