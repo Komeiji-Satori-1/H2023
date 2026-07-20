@@ -40,3 +40,13 @@ Complete the DAC NCO path with:
 - Added triangle-wave amplitude compensation: DFT fundamental amplitude is multiplied by `pi^2 / 8`
 - Added `adc_last_boundary_offset` to record the latest ADC DMA half/full boundary
 - DAC startup now estimates current ADC sample count using DMA `NDTR`, not only the coarse 1024-sample callback counter
+
+## 2026-07-20 recursive DFT update
+- Replaced per-sample `sinf()` / `cosf()` calls in `FFT_SingleFreqDFT_U16()`
+- The DFT now uses one precomputed phase step and recursive sine/cosine rotation inside the sample loop
+- Interface and phase convention are unchanged
+
+## 2026-07-20 PLL phase-error filter
+- Added a first-order low-pass filter for `phase_error` in `DacNco_PllUpdate()`
+- Filter state is cleared in `DacNco_Config()`
+- The filter is applied after phase deadband and before step/phase correction

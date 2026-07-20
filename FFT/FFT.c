@@ -227,7 +227,13 @@ void FFT_SingleFreqDFT_U16(const uint16_t *adc_buf,
     float real = 0.0f;
     float imag = 0.0f;
     float sample;
-    float angle;
+    float angle_step;
+    float sin_step;
+    float cos_step;
+    float sin_ref = 0.0f;
+    float cos_ref = 1.0f;
+    float next_sin;
+    float next_cos;
 
     if ((adc_buf == NULL) || (result == NULL) || (len == 0U) || (fs <= 0.0f))
     {
@@ -241,13 +247,27 @@ void FFT_SingleFreqDFT_U16(const uint16_t *adc_buf,
 
     dc /= (float)len;
 
+    /*
+     * CODEx 修改：
+     * 原来每个采样点都调用 sinf()/cosf()，两路跟踪时一帧要调用 2048 次三角函数，
+     * 在 1.025 MHz / 1024 点帧率下很容易算不过来，导致 ADC 帧和 DAC 重填延迟。
+     * 这里改成递推 DFT：只计算一次单步 sin/cos，循环内用旋转递推得到参考正弦/余弦。
+     */
+    angle_step = 2.0f * DFT_PI * target_freq / fs;
+    sin_step = sinf(angle_step);
+    cos_step = cosf(angle_step);
+
     for (i = 0; i < len; i++)
     {
         sample = (float)adc_buf[i] - dc;
-        angle = 2.0f * DFT_PI * target_freq * (float)i / fs;
 
-        real += sample * cosf(angle);
-        imag -= sample * sinf(angle);
+        real += sample * cos_ref;
+        imag -= sample * sin_ref;
+
+        next_cos = (cos_ref * cos_step) - (sin_ref * sin_step);
+        next_sin = (sin_ref * cos_step) + (cos_ref * sin_step);
+        cos_ref = next_cos;
+        sin_ref = next_sin;
     }
     result->real = real;
     result->imag = imag;

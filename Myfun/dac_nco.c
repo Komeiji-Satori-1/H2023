@@ -20,14 +20,16 @@
 #define DAC_NCO_TRI_FUND_TO_PEAK 1.23370055f
 
 #define DAC_NCO_PLL_FRAME_LEN 1024U
-#define DAC_NCO_PLL_PHASE_KP_SHIFT 1U
+#define DAC_NCO_PLL_PHASE_KP_SHIFT 3U
 #define DAC_NCO_PLL_STEP_KP_DIV 20U
 #define DAC_NCO_PLL_STEP_KI_DIV 200U
 #define DAC_NCO_PLL_STEP_KD_DIV 0U
-#define DAC_NCO_PLL_MAX_CORR_DIV 2000U
+#define DAC_NCO_PLL_MAX_CORR_DIV 200U
 #define DAC_NCO_PLL_INTEGRATOR_LIMIT 8589934592LL
 #define DAC_NCO_PLL_INTEGRATOR_LEAK_NUM 65535LL
 #define DAC_NCO_PLL_PHASE_DEADBAND_Q32 3000000L
+/* CODEx 修改：相位误差一阶低通系数，4 表示每帧向新误差移动 1/4，用来压制 DFT 相位抖动。 */
+#define DAC_NCO_PLL_ERROR_FILTER_DIV 4L
 
 extern float fs;
 
@@ -52,6 +54,8 @@ static int16_t s_sine_table[DAC_NCO_TABLE_LEN];
 static int16_t s_triangle_table[DAC_NCO_TABLE_LEN];
 static uint16_t dac_ch1_buf[DAC_NCO_BUF_LEN];
 static uint16_t dac_ch2_buf[DAC_NCO_BUF_LEN];
+/* CODEx 修改：保存每个通道滤波后的 PLL 相位误差，避免测量噪声直接推动 NCO 左右摆。 */
+static int32_t s_filtered_phase_error[2] = {0};
 static volatile uint8_t s_dac_ready_mask = 0;
 static volatile uint64_t s_dac_sample_count = 0;
 static volatile uint64_t s_dac_ready_play_sample[2] = {0};
@@ -418,6 +422,26 @@ static int32_t DacNco_ApplyPhaseDeadband(int32_t phase_error)
     return 0;
 }
 
+static int32_t DacNco_FilterPhaseError(uint8_t ch, int32_t phase_error)
+{
+    /*
+     * CODEx 修改：
+     * DFT 测得的相位每帧会有噪声，如果直接用于 phase_ref 和 inc_corr，
+     * NCO 会跟着噪声左右修正，示波器上表现为左右闪。
+     * 这里对 phase_error 做一阶低通：filtered += (new - filtered) / N。
+     */
+    if (ch >= 2U)
+    {
+        return phase_error;
+    }
+
+    s_filtered_phase_error[ch] +=
+        (int32_t)(((int64_t)phase_error - (int64_t)s_filtered_phase_error[ch]) /
+                  DAC_NCO_PLL_ERROR_FILTER_DIV);
+
+    return s_filtered_phase_error[ch];
+}
+
 static int64_t DacNco_LimitIntegrator(int64_t integrator, int32_t max_corr)
 {
     int64_t integrator_limit;
@@ -513,6 +537,10 @@ void DacNco_Config(const SignalInfo *A,
 
     DacNco_InitPll(0U, &s_sig[0]);
     DacNco_InitPll(1U, &s_sig[1]);
+
+    /* CODEx 修改：重新分离/重新配置 NCO 时，清空旧的相位误差滤波状态。 */
+    s_filtered_phase_error[0] = 0;
+    s_filtered_phase_error[1] = 0;
 
     s_dac_ready_mask = 0U;
     s_dac_sample_count = 0U;
@@ -649,6 +677,7 @@ void DacNco_PllUpdate(uint8_t ch, float measured_phase_rad, uint64_t frame_start
     predicted_phase = DacNco_PhaseAtSample(ch, frame_start_sample);
     phase_error = (int32_t)(measured_phase - predicted_phase);
     phase_error = DacNco_ApplyPhaseDeadband(phase_error);
+    phase_error = DacNco_FilterPhaseError(ch, phase_error);
 
     s_pll[ch].inc_corr = DacNco_PidStepCorrection(ch, phase_error);
     s_pll[ch].phase_ref = predicted_phase +

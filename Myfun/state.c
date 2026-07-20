@@ -256,8 +256,6 @@ void State_Init(void)
 
 void State_Proc(void)
 {
-    Usart_Rx_Proc();
-
     switch (state)
     {
     case STATE_IDLE:

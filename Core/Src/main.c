@@ -122,6 +122,7 @@ int main(void)
     while (1)
     {
         State_Proc();
+        Usart_Rx_Proc();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
