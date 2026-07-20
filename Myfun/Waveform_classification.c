@@ -140,56 +140,41 @@ static float harmonic_ratio_near(const float *mag,
     return harmonic_mag / base_mag;
 }
 
-void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B)
+void wavetypedetect(float *FFT_mag, float fs, SignalInfo *A, SignalInfo *B)
 {
     float uc_amp;
-    float max1 = 0.0f;
-    float max2 = 0.0f;
-    uint32_t index1 = 0U;
-    uint32_t index2 = 0U;
-    float a_3_ratio;
-    float a_5_ratio;
-    float b_3_ratio;
-    float b_5_ratio;
+    FFT_Process(ADC_UC, &uc_amp);
 
-    FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
-
-    if ((fft_mag == 0) || (A == 0) || (B == 0))
+    // 找两个峰 最大和次大
+    float max1 = 0.0f, max2 = 0.0f;
+    uint16_t index1 = 0, index2 = 0;
+    for (uint16_t i = 2; i < FFT_LEN / 2 - 1; i++)
     {
-        return;
-    }
-
-    for (uint32_t i = 2U; i < FFT_HALF_BIN - 1U; i++)
-    {
-        if ((fft_mag[i] > fft_mag[i - 1U]) && (fft_mag[i] > fft_mag[i + 1U]))
+        if (FFT_mag[i] > FFT_mag[i - 1] && FFT_mag[i] > FFT_mag[i + 1])
         {
-            if (fft_mag[i] > max1)
+            if (FFT_mag[i] > max1)
             {
-                max1 = fft_mag[i];
-                index1 = (uint16_t)i;
+                max1 = FFT_mag[i];
+                index1 = i;
             }
         }
     }
-
-    for (uint32_t i = 2U; i < FFT_HALF_BIN - 1U; i++)
+    for (uint16_t i = 2; i < FFT_LEN / 2 - 1; i++)
     {
-        uint32_t delta = (i > index1) ? (i - index1) : (index1 - i);
-
-        if (delta <= PEAK_GUARD)
+        if (abs((int)i - (int)index1) <= PEAK_GUARD)
         {
             continue;
         }
 
-        if ((fft_mag[i] > fft_mag[i - 1U]) && (fft_mag[i] > fft_mag[i + 1U]))
+        if (FFT_mag[i] > FFT_mag[i - 1] && FFT_mag[i] > FFT_mag[i + 1])
         {
-            if (fft_mag[i] > max2)
+            if (FFT_mag[i] > max2)
             {
-                max2 = fft_mag[i];
-                index2 = (uint16_t)i;
+                max2 = FFT_mag[i];
+                index2 = i;
             }
         }
     }
-
     if (index1 < index2)
     {
         A->bin = index1;
@@ -204,22 +189,120 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
     ADC_FFT_Get_Wave_Mes(A->bin, fs, &A->amp, &A->freq, 2);
     ADC_FFT_Get_Wave_Mes(B->bin, fs, &B->amp, &B->freq, 2);
 
-    a_3_ratio = harmonic_ratio_near(fft_mag, A->bin, A->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    a_5_ratio = harmonic_ratio_near(fft_mag, A->bin, A->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_3_ratio = harmonic_ratio_near(fft_mag, B->bin, B->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_5_ratio = harmonic_ratio_near(fft_mag, B->bin, B->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    // 波形判断
+    uint16_t a_3_index = A->bin * 3;
+    uint16_t b_3_index = B->bin * 3;
+    uint16_t a_5_index = A->bin * 5;
+    uint16_t b_5_index = B->bin * 5;
 
-    A->type = ((a_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (a_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
-              ? WAVE_TRIANGLE
-              : WAVE_SINE;
-    HMI_send_string("t5", (A->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
-    B->type = ((b_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (b_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
-              ? WAVE_TRIANGLE
-              : WAVE_SINE;
-    HMI_send_string("t6", (B->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
+    //float a_3_ratio = FFT_mag[a_3_index] / FFT_mag[A->bin];
+    //if (a_3_ratio > 0.08f)
+    //{
+    //    A->type = WAVE_TRIANGLE;
+    //    B->type = WAVE_SINE;
+    //}
+    //else
+    //{
+    //    if (B->bin * 3 < FFT_LEN / 2 && FFT_mag[b_3_index] / FFT_mag[B->bin] > 0.08f)
+    //    {
+    //        A->type = WAVE_SINE;
+    //        B->type = WAVE_TRIANGLE;
+    //    }
+    //    else
+    //    {
+    //        A->type = WAVE_SINE;
+    //        B->type = WAVE_SINE;
+    //    }
+    //}
+
+    
+    // 注：以下是我写的部分，根据题意，只有一个三角波因此判断A为三角波后B必定为正弦。而判断A为正弦后B的类型判断没写
+    if (FFT_mag[a_3_index] > 0)
+    {
+        if (a_3_index == B->bin)
+        {
+            if (FFT_mag[a_5_index] > 0.0f)
+            {
+                if (FFT_mag[a_5_index] / FFT_mag[A->bin] > 0.02f)
+                {
+                    A->type = WAVE_TRIANGLE;
+                    B->type = WAVE_SINE;
+                }
+                else
+                {
+                    A->type = WAVE_SINE;
+                    // 缺少B的判断
+                }
+            }
+            else
+            {
+                A->type = WAVE_SINE;
+                // 缺少B的判断
+            }
+        }
+        else
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+    }
+    //此分支应当为A三次谐波幅值为零、五次谐波幅值不为零的情况，但是前面没加return所以有bug
+    else if (FFT_mag[a_5_index] > 0)
+    {
+        if (a_5_index == B->bin)
+        {
+            if (FFT_mag[a_3_index] > 0.0f)
+            {
+                //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
+                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
+                {
+                    A->type = WAVE_TRIANGLE;
+                    B->type = WAVE_SINE;
+                }
+                else
+                {
+                    A->type = WAVE_SINE;
+                    // 缺少B的判断
+                }
+            }
+            else
+            {
+                A->type = WAVE_SINE;
+                // 缺少B的判断
+            }
+        }
+        else if (a_5_index == B->bin * 3)
+        {
+            //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
+            if (FFT_mag[a_3_index] > 0.0f)
+            {
+                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
+                {
+                    A->type = WAVE_TRIANGLE;
+                    B->type = WAVE_SINE;
+                }
+                else
+                {
+                    A->type = WAVE_SINE;
+                    // 缺少B的判断
+                }
+            }
+            else
+            {
+                A->type = WAVE_SINE;
+                // 缺少B的判断
+            }
+        }
+    }
+    // A的三次谐波无幅值且五次谐波无幅值才会进入else但是前面没加return所以有bug
+    else
+    {
+        //等你补充
+    }
 }
 
-void test(void)
+
+void test()
 {
     wavetypedetect(FFT_mag, fs, &A, &B);
 }

@@ -93,8 +93,6 @@ virtualFolder:
         - path: Myfun/state.h
         - path: Myfun/Waveform_classification.c
         - path: Myfun/Waveform_classification.h
-        - path: Myfun/dac_nco.c
-        - path: Myfun/dac_nco.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -124,7 +122,8 @@ targets:
         - .cmsis/include
         - MDK-ARM/RTE/_23H
       libList: []
-    excludeList: []
+    excludeList:
+      - <virtual_root>/Waveform_classification.c
     settings:
       debugger: cortex-debug
     toolchain: AC5
