@@ -25,6 +25,7 @@ virtualFolder:
                 - path: Core/Src/adc.c
                 - path: Core/Src/dac.c
                 - path: Core/Src/dma.c
+                - path: Core/Src/bdma.c
                 - path: Core/Src/tim.c
                 - path: Core/Src/usart.c
                 - path: Core/Src/stm32h7xx_it.c
@@ -100,8 +101,6 @@ virtualFolder:
         - path: Myfun/pid.h
         - path: Myfun/ad9833_fll.c
         - path: Myfun/ad9833_fll.h
-        - path: Myfun/dac_nco.c
-        - path: Myfun/dac_nco.h
         - path: Myfun/Waveform_classification.c
         - path: Myfun/Waveform_classification.h
       folders: []

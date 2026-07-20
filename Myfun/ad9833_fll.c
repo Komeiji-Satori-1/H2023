@@ -9,10 +9,11 @@
 #define AD9833_FLL_MIN_FREQ_HZ 1.0f
 #define AD9833_FLL_MAX_FREQ_HZ 1000000.0f
 #define AD9833_FLL_MIN_MAG 1.0f
-#define AD9833_FLL_PID_KP 12.0f
-#define AD9833_FLL_PID_KI 0.08f
-#define AD9833_FLL_PID_KD 0.0f
-#define AD9833_FLL_MAX_CORR_HZ 200.0f
+#define AD9833_FLL_PID_KP 3.0f
+#define AD9833_FLL_PID_KI 0.02f
+#define AD9833_FLL_PID_KD 0.1f
+#define AD9833_FLL_PID_I_MAX 12.0f
+#define AD9833_FLL_PID_OUT_MAX 16.0f
 
 typedef struct
 {
@@ -21,7 +22,7 @@ typedef struct
     float freq_corr_hz;
     uint16_t wave_type;
     uint8_t chip;
-    PidController_t pid;
+    pid_struct_t pid;
     Ad9833FllDebug_t debug;
 } Ad9833FllChannel_t;
 
@@ -101,12 +102,13 @@ static void Ad9833Fll_ConfigChannel(uint8_t index,
     s_fll[index].wave_type = Ad9833Fll_WaveTypeToAd9833(sig->type);
     s_fll[index].chip = chip;
 
-    Pid_Init(&s_fll[index].pid,
+    pid_init(&s_fll[index].pid,
              AD9833_FLL_PID_KP,
              AD9833_FLL_PID_KI,
              AD9833_FLL_PID_KD,
-             -AD9833_FLL_MAX_CORR_HZ,
-             AD9833_FLL_MAX_CORR_HZ);
+             AD9833_FLL_PID_I_MAX,
+             AD9833_FLL_PID_OUT_MAX,
+             0.0f);
 }
 
 static void Ad9833Fll_UpdateChannel(uint8_t index,
@@ -128,10 +130,10 @@ static void Ad9833Fll_UpdateChannel(uint8_t index,
     }
 
     error = Ad9833Fll_WrapPi(fb->phase - ref->phase);
-    pid_out = Pid_Calc(&s_fll[index].pid, error);
+    pid_out = pid_calc(&s_fll[index].pid, 0.0f, error);
     pid_out = Ad9833Fll_LimitFloat(pid_out,
-                                   -AD9833_FLL_MAX_CORR_HZ,
-                                   AD9833_FLL_MAX_CORR_HZ);
+                                   -AD9833_FLL_PID_OUT_MAX,
+                                   AD9833_FLL_PID_OUT_MAX);
 
     s_fll[index].freq_corr_hz = pid_out;
     next_freq = s_fll[index].base_freq_hz - s_fll[index].freq_corr_hz;
@@ -186,8 +188,8 @@ void Ad9833Fll_Start(void)
         return;
     }
 
-    Pid_Reset(&s_fll[0].pid);
-    Pid_Reset(&s_fll[1].pid);
+    pid_reset(&s_fll[0].pid);
+    pid_reset(&s_fll[1].pid);
     s_running = 1;
 }
 

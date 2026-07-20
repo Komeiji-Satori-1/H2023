@@ -5,7 +5,6 @@
 #include "Waveform_classification.h"
 #include "AD9833.h"
 #include "ad9833_fll.h"
-#include "dac_nco.h"
 #include <string.h>
 
 #define HMI_CMD_A1 0xA1
@@ -25,10 +24,10 @@ extern volatile uint64_t adc_ready_sample_start;
 extern SignalInfo A;
 extern SignalInfo B;
 
-__weak uint16_t ADC_AD9833_A[ADC_LEN] = {0};
-__weak uint16_t ADC_AD9833_B[ADC_LEN] = {0};
-__weak volatile int32_t adc_fll_ready_offset = -1;
-__weak volatile uint64_t adc_fll_ready_sample_start = 0;
+extern uint16_t ADC_AD9833_A[ADC_LEN];
+extern uint16_t ADC_AD9833_B[ADC_LEN];
+extern volatile int32_t adc_fll_ready_offset;
+extern volatile uint64_t adc_fll_ready_sample_start;
 
 typedef enum
 {
@@ -160,7 +159,6 @@ static void State_StartSeparate(void)
     separate_config_ready = 0;
     phase_ready = 0;
 
-    DacNco_Stop();
     Ad9833Fll_Stop();
 
     if (!State_CopyStableAdcFrame(adc_frame, STATE_FRAME_LEN))

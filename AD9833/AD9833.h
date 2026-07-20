@@ -6,14 +6,14 @@
 /* =========================================================================
  * SPI GPIO 宏（原 My_SPI/My_SPI.h）
  * ========================================================================= */
-#define AD9833_SPI_SCK_H    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_14, GPIO_PIN_SET)
-#define AD9833_SPI_SCK_L    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_14, GPIO_PIN_RESET)
-#define AD9833_SPI_SDA_H    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_SET)
-#define AD9833_SPI_SDA_L    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_RESET)
-#define AD9833_SPI_CS1_H     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_SET)
-#define AD9833_SPI_CS1_L     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_RESET)
-#define AD9833_SPI_CS2_H      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET)
-#define AD9833_SPI_CS2_L       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET)
+#define AD9833_SPI_SCK_H    HAL_GPIO_WritePin(AD9833_SCLK_GPIO_Port, AD9833_SCLK_Pin, GPIO_PIN_SET)
+#define AD9833_SPI_SCK_L    HAL_GPIO_WritePin(AD9833_SCLK_GPIO_Port, AD9833_SCLK_Pin, GPIO_PIN_RESET)
+#define AD9833_SPI_SDA_H    HAL_GPIO_WritePin(AD9833_SDA_GPIO_Port, AD9833_SDA_Pin, GPIO_PIN_SET)
+#define AD9833_SPI_SDA_L    HAL_GPIO_WritePin(AD9833_SDA_GPIO_Port, AD9833_SDA_Pin, GPIO_PIN_RESET)
+#define AD9833_SPI_CS1_H    HAL_GPIO_WritePin(AD9833_CS1_GPIO_Port, AD9833_CS1_Pin, GPIO_PIN_SET)
+#define AD9833_SPI_CS1_L    HAL_GPIO_WritePin(AD9833_CS1_GPIO_Port, AD9833_CS1_Pin, GPIO_PIN_RESET)
+#define AD9833_SPI_CS2_H    HAL_GPIO_WritePin(AD9833_CS2_GPIO_Port, AD9833_CS2_Pin, GPIO_PIN_SET)
+#define AD9833_SPI_CS2_L    HAL_GPIO_WritePin(AD9833_CS2_GPIO_Port, AD9833_CS2_Pin, GPIO_PIN_RESET)
 
 /* =========================================================================
  * AD9833 寄存器地址
