@@ -1,6 +1,6 @@
 #include "Waveform_classification.h"
 
-#define PEAK_GUARD 5U
+#define PEAK_GUARD 2U
 #define HARMONIC_SEARCH_HALF_WIDTH 2U
 #define TRI_3RD_RATIO_THRESHOLD 0.08f
 #define TRI_5TH_RATIO_THRESHOLD 0.02f

@@ -93,6 +93,8 @@ virtualFolder:
         - path: Myfun/state.h
         - path: Myfun/Waveform_classification.c
         - path: Myfun/Waveform_classification.h
+        - path: Myfun/dac_nco.c
+        - path: Myfun/dac_nco.h
       folders: []
     - name: ::CMSIS
       files: []
