@@ -16,6 +16,8 @@
 #define DAC_NCO_ADC_TO_DAC_SCALE (4095.0f / 65535.0f)
 #define DAC_NCO_MIN_DAC_AMP 1.0f
 #define DAC_NCO_MAX_DAC_AMP 2047.0f
+/* CODEx 修改：三角波单频 DFT 测到的是基波幅值，真实峰值 = 基波幅值 * pi^2 / 8。 */
+#define DAC_NCO_TRI_FUND_TO_PEAK 1.23370055f
 
 #define DAC_NCO_PLL_FRAME_LEN 1024U
 #define DAC_NCO_PLL_PHASE_KP_SHIFT 1U
@@ -219,7 +221,20 @@ static float DacNco_GetAmplitudeCounts(const SignalInfo *sig)
         return 0.0f;
     }
 
-    amp = fabsf(sig->amp) * DAC_NCO_ADC_TO_DAC_SCALE;
+    amp = fabsf(sig->amp);
+
+    /*
+     * CODEx 修改：
+     * 对三角波，单频 DFT 只测到了基波幅值。
+     * 理想三角波基波峰值 = 实际峰值 * 8 / pi^2，
+     * 所以重建三角波前要乘 pi^2 / 8，否则 1Vpp 会变成约 0.81Vpp。
+     */
+    if (sig->type == WAVE_TRIANGLE)
+    {
+        amp *= DAC_NCO_TRI_FUND_TO_PEAK;
+    }
+
+    amp *= DAC_NCO_ADC_TO_DAC_SCALE;
 
     if (amp < DAC_NCO_MIN_DAC_AMP)
     {

@@ -35,3 +35,8 @@ Complete the DAC NCO path with:
 - Initial DFT phase is still referenced to `adc_frame_sample_start`
 - DAC startup now reads the current `adc_sample_count` and starts the first DAC sample from that predicted NCO phase
 - This keeps ADC DFT phase reference and DAC/NCO playback on the same sample-count time axis
+
+## 2026-07-20 amplitude and ADC-now fix
+- Added triangle-wave amplitude compensation: DFT fundamental amplitude is multiplied by `pi^2 / 8`
+- Added `adc_last_boundary_offset` to record the latest ADC DMA half/full boundary
+- DAC startup now estimates current ADC sample count using DMA `NDTR`, not only the coarse 1024-sample callback counter

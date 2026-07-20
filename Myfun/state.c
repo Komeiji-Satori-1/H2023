@@ -1,4 +1,5 @@
 #include "state.h"
+#include "adc.h"
 #include "calculate.h"
 #include "command.h"
 #include "FFT.h"
@@ -21,6 +22,7 @@ extern uint16_t ADC_C[ADC_LEN];
 extern volatile int32_t adc_ready_offset;
 extern volatile uint64_t adc_sample_count;
 extern volatile uint64_t adc_ready_sample_start;
+extern volatile uint32_t adc_last_boundary_offset;
 extern SignalInfo A;
 extern SignalInfo B;
 
@@ -98,6 +100,43 @@ static uint8_t State_CopyStableAdcFrame(uint16_t *dst, uint16_t len)
                                    STATE_ADC_WAIT_TIMEOUT_MS);
 }
 
+static uint64_t State_GetCurrentAdcSampleCount(void)
+{
+    uint64_t base_count;
+    uint32_t boundary_offset;
+    uint32_t dma_pos;
+    uint32_t sample_delta;
+
+    /*
+     * CODEx 修改：
+     * adc_sample_count 只在半传输/全传输回调里每次增加 1024，
+     * 它代表最近一个 DMA 边界时间，不代表当前时间。
+     * 这里读取 DMA NDTR 推算当前写入位置，再加上从最近边界到当前写入位置的样点差，
+     * 得到更接近“当前 ADC 时间”的采样编号，用于 DAC 起播相位预测。
+     */
+    __disable_irq();
+    base_count = adc_sample_count;
+    boundary_offset = adc_last_boundary_offset;
+
+    if (hadc1.DMA_Handle != NULL)
+    {
+        dma_pos = ADC_LEN - __HAL_DMA_GET_COUNTER(hadc1.DMA_Handle);
+        if (dma_pos >= ADC_LEN)
+        {
+            dma_pos = 0U;
+        }
+
+        sample_delta = (dma_pos + ADC_LEN - boundary_offset) % ADC_LEN;
+    }
+    else
+    {
+        sample_delta = 0U;
+    }
+    __enable_irq();
+
+    return base_count + (uint64_t)sample_delta;
+}
+
 static void State_MeasureDftInfo(uint16_t *frame)
 {
     FFT_SingleFreqResult_t dft_a;
@@ -152,12 +191,10 @@ static void State_StartSeparate(void)
     /*
      * CODEx 修改：
      * DAC 真正开始输出时已经晚于 adc_frame_sample_start。
-     * 这里读取当前 ADC 已完成采样计数，把 DAC 第一个输出点对齐到“当前 ADC 时间”，
-     * 避免用过去那帧的相位直接起播导致锁不住相。
+     * 这里不再直接使用只按 1024 点跳变的 adc_sample_count，
+     * 而是结合 DMA NDTR 推算当前 ADC 时间，让 DAC 第一个输出点对齐当前采样时刻。
      */
-    __disable_irq();
-    dac_start_sample = adc_sample_count;
-    __enable_irq();
+    dac_start_sample = State_GetCurrentAdcSampleCount();
 
     DacNco_StartAtSample(dac_start_sample);
 

@@ -58,6 +58,8 @@ volatile uint8_t adc_full_ready = 0;
 volatile int32_t adc_ready_offset = -1;
 volatile uint64_t adc_sample_count = 0;
 volatile uint64_t adc_ready_sample_start = 0;
+/* CODEx 修改：记录最近一次 ADC 半帧/整帧回调后，DMA 当前段的起始写入位置。 */
+volatile uint32_t adc_last_boundary_offset = 0;
 uint16_t ADC_C[ADC_LEN] = {0};
 uint8_t ADC_flag = 0;
 /* USER CODE END PV */
@@ -194,6 +196,8 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
         adc_sample_count += (ADC_LEN / 2U);
         adc_ready_offset = 0;
         adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
+        /* CODEx 修改：半传输完成后，DMA 已进入后半区，当前时间边界在 ADC_LEN/2。 */
+        adc_last_boundary_offset = (ADC_LEN / 2U);
     }
 }
 
@@ -205,6 +209,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         adc_sample_count += (ADC_LEN / 2U);
         adc_ready_offset = (int32_t)(ADC_LEN / 2U);
         adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
+        /* CODEx 修改：全传输完成后，DMA 回到前半区，当前时间边界在 0。 */
+        adc_last_boundary_offset = 0U;
     }
 }
 /* USER CODE END 4 */
