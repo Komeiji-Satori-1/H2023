@@ -5,7 +5,7 @@ simDir = fileparts(mfilename('fullpath'));
 
 FFT_LEN = 1024;
 FS = 1025641.0;
-PEAK_GUARD = 5;
+PEAK_GUARD = 2;
 HARMONIC_SEARCH_HALF_WIDTH = 2;
 TRI_3RD_RATIO_THRESHOLD = 0.08;
 TRI_5TH_RATIO_THRESHOLD = 0.02;
@@ -99,10 +99,12 @@ wrongCases = table(wrongCase, wrongFA, wrongFB, wrongTrueA, wrongTrueB, ...
     'predA', 'predB', 'aBin', 'bBin', 'branch', ...
     'a3Ratio', 'a5Ratio', 'b3Ratio', 'b5Ratio'});
 
-writetable(summary, fullfile(simDir, 'fft_simulation_summary.csv'));
-writetable(wrongCases, fullfile(simDir, 'fft_wrong_cases.csv'));
+summaryPath = writeTableWithFallback(summary, fullfile(simDir, 'fft_simulation_summary.csv'));
+wrongCasesPath = writeTableWithFallback(wrongCases, fullfile(simDir, 'fft_wrong_cases.csv'));
 
 disp(summary);
+fprintf('Summary saved to: %s\n', summaryPath);
+fprintf('Wrong cases saved to: %s\n', wrongCasesPath);
 
 if isempty(wrongCase)
     fprintf('No wrong cases found.\n');
@@ -270,4 +272,17 @@ function detail = makeDetail(aBin, bBin, a3Ratio, a5Ratio, b3Ratio, b5Ratio, bra
         'b3Ratio', b3Ratio, ...
         'b5Ratio', b5Ratio, ...
         'branch', branch);
+end
+
+function usedPath = writeTableWithFallback(tbl, targetPath)
+    try
+        writetable(tbl, targetPath);
+        usedPath = targetPath;
+    catch
+        [folder, name, ext] = fileparts(targetPath);
+        stamp = datestr(now, 'yyyymmdd_HHMMSS');
+        usedPath = fullfile(folder, [name '_' stamp ext]);
+        writetable(tbl, usedPath);
+        warning('Could not write %s. Wrote %s instead.', targetPath, usedPath);
+    end
 end
