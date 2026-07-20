@@ -15,6 +15,7 @@
 #define STATE_DEFAULT_VOUT 1.0f
 #define STATE_PHASE_MAX_DEG 180U
 #define STATE_FRAME_LEN 1024U
+#define STATE_FLL_FRAME_LEN 256U
 #define STATE_ADC_WAIT_TIMEOUT_MS 100U
 #define STATE_ADC_FS_HZ 1025641.0f
 
@@ -46,8 +47,9 @@ static uint8_t separate_config_ready = 0;
 static uint8_t phase_ready = 0;
 static uint16_t phase_deg = 0;
 static uint16_t adc_frame[STATE_FRAME_LEN];
-static uint16_t adc_a_frame[STATE_FRAME_LEN];
-static uint16_t adc_b_frame[STATE_FRAME_LEN];
+static uint16_t adc_fll_c_frame[STATE_FLL_FRAME_LEN];
+static uint16_t adc_fll_a_frame[STATE_FLL_FRAME_LEN];
+static uint16_t adc_fll_b_frame[STATE_FLL_FRAME_LEN];
 static uint64_t adc_frame_sample_start = 0;
 
 uint16_t freq = STATE_DEFAULT_FREQ;
@@ -116,7 +118,7 @@ static uint8_t State_TakeReadyFllFrame(uint16_t *c_dst,
     int32_t ready_offset;
 
     if ((c_dst == NULL) || (a_dst == NULL) || (b_dst == NULL) ||
-        (len != STATE_FRAME_LEN) || (ADC_LEN < (STATE_FRAME_LEN * 2U)))
+        (len != STATE_FLL_FRAME_LEN) || (ADC_LEN < (STATE_FRAME_LEN * 2U)))
     {
         return 0;
     }
@@ -190,18 +192,18 @@ static void State_ConfigAd9833(void)
 
 static void State_FreqLock(void)
 {
-    if (!State_TakeReadyFllFrame(adc_frame,
-                                 adc_a_frame,
-                                 adc_b_frame,
-                                 STATE_FRAME_LEN))
+    if (!State_TakeReadyFllFrame(adc_fll_c_frame,
+                                 adc_fll_a_frame,
+                                 adc_fll_b_frame,
+                                 STATE_FLL_FRAME_LEN))
     {
         return;
     }
 
-    Ad9833Fll_Task(adc_frame,
-                   adc_a_frame,
-                   adc_b_frame,
-                   STATE_FRAME_LEN,
+    Ad9833Fll_Task(adc_fll_c_frame,
+                   adc_fll_a_frame,
+                   adc_fll_b_frame,
+                   STATE_FLL_FRAME_LEN,
                    STATE_ADC_FS_HZ);
 }
 
