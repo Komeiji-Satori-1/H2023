@@ -1,0 +1,5 @@
+caseFile,trueA,trueB,total,correct,accuracy
+case1_A_sine_B_sine.csv,sine,sine,136,136,1
+case2_A_triangle_B_triangle.csv,triangle,triangle,136,136,1
+case3_A_triangle_B_sine.csv,triangle,sine,136,136,1
+case4_A_sine_B_triangle.csv,sine,triangle,136,136,1
