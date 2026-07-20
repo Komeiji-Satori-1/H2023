@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file    gpio.c
+  * @file    bdma.c
   * @brief   This file provides code for the configuration
-  *          of all used GPIO pins.
+  *          of all the requested memory to memory DMA transfers.
   ******************************************************************************
   * @attention
   *
@@ -18,47 +18,33 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "gpio.h"
+#include "bdma.h"
 
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
 
 /*----------------------------------------------------------------------------*/
-/* Configure GPIO                                                             */
+/* Configure DMA                                                              */
 /*----------------------------------------------------------------------------*/
+
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
 
-/** Configure pins
-     PC14-OSC32_IN (OSC32_IN)   ------> RCC_OSC32_IN
-     PC15-OSC32_OUT (OSC32_OUT)   ------> RCC_OSC32_OUT
-     PH0-OSC_IN (PH0)   ------> RCC_OSC_IN
-     PH1-OSC_OUT (PH1)   ------> RCC_OSC_OUT
-     PA13 (JTMS/SWDIO)   ------> DEBUG_JTMS-SWDIO
-     PA14 (JTCK/SWCLK)   ------> DEBUG_JTCK-SWCLK
-*/
-void MX_GPIO_Init(void)
+/**
+  * Enable DMA controller clock
+  */
+void MX_BDMA_Init(void)
 {
 
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* DMA controller clock enable */
+  __HAL_RCC_BDMA_CLK_ENABLE();
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, AD9833_CS1_Pin|AD9833_CS2_Pin|AD9833_SCLK_Pin|AD9833_SDA_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PBPin PBPin PBPin PBPin */
-  GPIO_InitStruct.Pin = AD9833_CS1_Pin|AD9833_CS2_Pin|AD9833_SCLK_Pin|AD9833_SDA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /* DMA interrupt init */
+  /* BDMA_Channel0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(BDMA_Channel0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(BDMA_Channel0_IRQn);
 
 }
 

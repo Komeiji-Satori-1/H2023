@@ -60,10 +60,14 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define ADC_C_Pin GPIO_PIN_0
 #define ADC_C_GPIO_Port GPIOA
-#define DAC_A_Pin GPIO_PIN_4
-#define DAC_A_GPIO_Port GPIOA
-#define DAC_B_Pin GPIO_PIN_5
-#define DAC_B_GPIO_Port GPIOA
+#define AD9833_CS1_Pin GPIO_PIN_12
+#define AD9833_CS1_GPIO_Port GPIOB
+#define AD9833_CS2_Pin GPIO_PIN_13
+#define AD9833_CS2_GPIO_Port GPIOB
+#define AD9833_SCLK_Pin GPIO_PIN_14
+#define AD9833_SCLK_GPIO_Port GPIOB
+#define AD9833_SDA_Pin GPIO_PIN_15
+#define AD9833_SDA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 #define FFT_LEN 1024 // FFT 点数，必须是2的幂
 #define ADC_LEN (FFT_LEN*2)
