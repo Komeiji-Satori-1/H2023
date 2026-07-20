@@ -1,0 +1,34 @@
+caseFile,fA,fB,trueA,trueB,predA,predB,aBin,bBin,branch,a3Ratio,a5Ratio,b3Ratio,b5Ratio
+case2_A_triangle_B_triangle.csv,60000,65000,triangle,triangle,triangle,sine,60,195,"3fA~=fB and A3 exists, 5fA~=3fB: use 3fB for B",0.103670830374215,0.0345819227296677,0,0
+case2_A_triangle_B_triangle.csv,65000,70000,triangle,triangle,triangle,sine,65,195,"3fA=fB: use 5fA for A, use 3fB for B",0.104920383403854,0.0345720194935113,0,0
+case2_A_triangle_B_triangle.csv,70000,75000,triangle,triangle,triangle,sine,70,210,"3fA=fB: use 5fA for A, use 3fB for B",0.104007498780687,0.0335568749679975,0,0
+case2_A_triangle_B_triangle.csv,75000,80000,triangle,triangle,triangle,sine,75,225,"3fA=fB: use 5fA for A, use 3fB for B",0.10299086045576,0.0363613352041432,0,0
+case2_A_triangle_B_triangle.csv,80000,85000,triangle,triangle,triangle,sine,80,240,"3fA=fB: use 5fA for A, use 3fB for B",0.102087270007067,0.0371906538921916,0,0
+case2_A_triangle_B_triangle.csv,85000,90000,triangle,triangle,triangle,sine,85,255,"3fA=fB: use 5fA for A, use 3fB for B",0.100765081477728,0.037819785716152,0,0
+case2_A_triangle_B_triangle.csv,90000,95000,triangle,triangle,triangle,sine,90,270,"3fA=fB: use 5fA for A, use 3fB for B",0.0995814803308994,0.0384731217484539,0,0
+case2_A_triangle_B_triangle.csv,95000,100000,triangle,triangle,triangle,sine,95,285,"3fA=fB: use 5fA for A, use 3fB for B",0.0983925530250256,0.0375478681322359,0,0
+case3_A_triangle_B_sine.csv,20000,25000,triangle,sine,sine,triangle,25,60,"A3~=0 false: A=sine, use 3fB for B",0.000255950023846282,0.000351225194094746,0.105914673568972,0.0346019043652387
+case3_A_triangle_B_sine.csv,25000,30000,triangle,sine,sine,triangle,30,75,"A3~=0 false: A=sine, use 3fB for B",4.27137798557844e-06,0.000489899427937612,0.102477019353069,0.0359301258564165
+case3_A_triangle_B_sine.csv,30000,35000,triangle,sine,sine,triangle,35,90,"A3~=0 false: A=sine, use 3fB for B",7.7296707941681e-05,3.410317063311e-05,0.0997232143836068,0.0385381624441919
+case3_A_triangle_B_sine.csv,35000,40000,triangle,sine,sine,triangle,40,105,"A3~=0 false: A=sine, use 3fB for B",2.35074192867902e-05,0.000663920487141559,0.0963740518007148,0
+case3_A_triangle_B_sine.csv,40000,45000,triangle,sine,sine,triangle,45,120,"A3~=0 false: A=sine, use 3fB for B",0.000953884577774308,7.18182718635254e-05,0.101250351970883,0
+case3_A_triangle_B_sine.csv,45000,50000,triangle,sine,sine,triangle,50,135,"A3~=0 false: A=sine, use 3fB for B",0.000229219836846833,7.34978136972122e-06,0.105771706984393,0
+case3_A_triangle_B_sine.csv,50000,55000,triangle,sine,sine,triangle,55,150,"A3~=0 false: A=sine, use 3fB for B",1.7670144833855e-05,0.00353359869472966,0.109667229095933,0
+case3_A_triangle_B_sine.csv,55000,60000,triangle,sine,sine,triangle,60,165,"A3~=0 false: A=sine, use 3fB for B",1.81811289987069e-05,2.27874602105029e-05,0.113034258995076,0
+case3_A_triangle_B_sine.csv,60000,65000,triangle,sine,sine,sine,65,180,"A3~=0 false: A=sine, use 3fB for B",1.56614450522865e-05,0.000114596781739954,0,0
+case3_A_triangle_B_sine.csv,65000,70000,triangle,sine,sine,sine,70,195,"A3~=0 false: A=sine, use 3fB for B",0.00221622435396281,0.000215704964051005,0,0
+case3_A_triangle_B_sine.csv,70000,75000,triangle,sine,sine,sine,75,210,"A3~=0 false: A=sine, use 3fB for B",2.00143105101551e-05,9.85810602643244e-06,0,0
+case3_A_triangle_B_sine.csv,75000,80000,triangle,sine,sine,sine,80,225,"A3~=0 false: A=sine, use 3fB for B",2.55016848409665e-05,0.00215706922994099,0,0
+case3_A_triangle_B_sine.csv,80000,85000,triangle,sine,sine,sine,85,240,"A3~=0 false: A=sine, use 3fB for B",6.21635650057309e-05,0.000412236160227106,0,0
+case3_A_triangle_B_sine.csv,85000,90000,triangle,sine,sine,sine,90,255,"A3~=0 false: A=sine, use 3fB for B",0.0006445292347145,0.00022791246737062,0,0
+case3_A_triangle_B_sine.csv,90000,95000,triangle,sine,sine,sine,95,270,"A3~=0 false: A=sine, use 3fB for B",0.00074786809310626,1.65677946312448e-05,0,0
+case3_A_triangle_B_sine.csv,95000,100000,triangle,sine,sine,sine,100,285,"A3~=0 false: A=sine, use 3fB for B",1.35457901990588e-05,8.74871949916884e-06,0,0
+case4_A_sine_B_triangle.csv,55000,60000,sine,triangle,sine,sine,55,180,"A3~=0 false: A=sine, use 3fB for B",0.00013757950678548,0.000150958730903247,0,0
+case4_A_sine_B_triangle.csv,60000,65000,sine,triangle,sine,sine,60,195,"A3~=0 false: A=sine, use 3fB for B",0.00440571282833001,2.67405166428611e-05,0,0
+case4_A_sine_B_triangle.csv,65000,70000,sine,triangle,sine,sine,65,210,"A3~=0 false: A=sine, use 3fB for B",1.97445224243484e-05,8.19350228841209e-06,0,0
+case4_A_sine_B_triangle.csv,70000,75000,sine,triangle,sine,sine,70,225,"A3~=0 false: A=sine, use 3fB for B",3.02816562400818e-05,0.0100470492302635,0,0
+case4_A_sine_B_triangle.csv,75000,80000,sine,triangle,sine,sine,75,240,"A3~=0 false: A=sine, use 3fB for B",5.5874397054873e-05,4.71216688443786e-05,0,0
+case4_A_sine_B_triangle.csv,80000,85000,sine,triangle,sine,sine,80,255,"A3~=0 false: A=sine, use 3fB for B",0.000509686300389594,0.00027890168160775,0,0
+case4_A_sine_B_triangle.csv,85000,90000,sine,triangle,sine,sine,85,270,"A3~=0 false: A=sine, use 3fB for B",0.000562824397342371,1.92817173348512e-05,0,0
+case4_A_sine_B_triangle.csv,90000,95000,sine,triangle,sine,sine,90,285,"A3~=0 false: A=sine, use 3fB for B",1.58681919077958e-05,5.35741982897575e-06,0,0
+case4_A_sine_B_triangle.csv,95000,100000,sine,triangle,sine,sine,95,300,"A3~=0 false: A=sine, use 3fB for B",5.45234289238498e-05,0.00331122781613946,0,0

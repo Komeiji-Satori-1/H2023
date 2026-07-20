@@ -4,6 +4,7 @@
 #define HARMONIC_SEARCH_HALF_WIDTH 2U
 #define TRI_3RD_RATIO_THRESHOLD 0.08f
 #define TRI_5TH_RATIO_THRESHOLD 0.02f
+#define BIN_MATCH_TOLERANCE HARMONIC_SEARCH_HALF_WIDTH
 #define FFT_HALF_BIN (FFT_LEN / 2U)
 #define FFT_LAST_BIN (FFT_HALF_BIN - 1U)
 #define MAG_EPSILON 1.0e-12f
@@ -11,7 +12,6 @@
 extern uint16_t ADC_C[ADC_LEN];
 extern float fs;
 extern float FFT_mag[FFT_LEN];
-extern float FFT_Input[FFT_LEN * 2];
 
 SignalInfo A;
 SignalInfo B;
@@ -140,24 +140,71 @@ static float harmonic_ratio_near(const float *mag,
     return harmonic_mag / base_mag;
 }
 
-void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B)
+static uint8_t bins_near(uint32_t left_bin, uint32_t right_bin, uint32_t tolerance)
+{
+    uint32_t diff;
+
+    if (left_bin > right_bin)
+    {
+        diff = left_bin - right_bin;
+    }
+    else
+    {
+        diff = right_bin - left_bin;
+    }
+
+    return (diff <= tolerance) ? 1U : 0U;
+}
+
+static uint8_t harmonic_bin_is_valid(uint32_t harmonic_bin)
+{
+    return ((harmonic_bin >= 2U) && (harmonic_bin <= FFT_LAST_BIN)) ? 1U : 0U;
+}
+
+static WaveType classify_by_ratio(float ratio, float threshold)
+{
+    return (ratio > threshold) ? WAVE_TRIANGLE : WAVE_SINE;
+}
+
+static WaveType classify_b_by_3rd(float b3_ratio)
+{
+    return classify_by_ratio(b3_ratio, TRI_3RD_RATIO_THRESHOLD);
+}
+
+static WaveType classify_b_by_5th_or_fallback(uint32_t b5_bin, float b5_ratio, float b3_ratio)
+{
+    if (harmonic_bin_is_valid(b5_bin) != 0U)
+    {
+        return classify_by_ratio(b5_ratio, TRI_5TH_RATIO_THRESHOLD);
+    }
+
+    return classify_b_by_3rd(b3_ratio);
+}
+
+void wavetypedetect(const float *fft_mag, float sampling_fs, SignalInfo *A, SignalInfo *B)
 {
     float uc_amp;
     float max1 = 0.0f;
     float max2 = 0.0f;
     uint32_t index1 = 0U;
     uint32_t index2 = 0U;
-    uint32_t a_3_index;
-    uint32_t a_5_index;
-    uint32_t b_3_index;
-    uint32_t b_5_index;
-
-    FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
+    uint32_t a3_bin;
+    uint32_t a5_bin;
+    uint32_t b3_bin;
+    uint32_t b5_bin;
+    float a3_ratio;
+    float a5_ratio;
+    float b3_ratio;
+    float b5_ratio;
+    uint8_t a3_overlaps_b_base;
+    uint8_t a5_overlaps_b3;
 
     if ((fft_mag == 0) || (A == 0) || (B == 0))
     {
         return;
     }
+
+    FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
 
     for (uint32_t i = 2U; i < FFT_HALF_BIN - 1U; i++)
     {
@@ -166,16 +213,13 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
             if (fft_mag[i] > max1)
             {
                 max1 = fft_mag[i];
-                index1 = (uint16_t)i;
+                index1 = i;
             }
         }
     }
-
     for (uint32_t i = 2U; i < FFT_HALF_BIN - 1U; i++)
     {
-        uint32_t delta = (i > index1) ? (i - index1) : (index1 - i);
-
-        if (delta <= PEAK_GUARD)
+        if (bins_near(i, index1, PEAK_GUARD) != 0U)
         {
             continue;
         }
@@ -185,9 +229,14 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
             if (fft_mag[i] > max2)
             {
                 max2 = fft_mag[i];
-                index2 = (uint16_t)i;
+                index2 = i;
             }
         }
+    }
+
+    if ((index1 == 0U) || (index2 == 0U))
+    {
+        return;
     }
 
     if (index1 < index2)
@@ -201,93 +250,46 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
         B->bin = index1;
     }
 
-    ADC_FFT_Get_Wave_Mes(A->bin, fs, &A->amp, &A->freq, 2);
-    ADC_FFT_Get_Wave_Mes(B->bin, fs, &B->amp, &B->freq, 2);
+    ADC_FFT_Get_Wave_Mes(A->bin, sampling_fs, &A->amp, &A->freq, 2);
+    ADC_FFT_Get_Wave_Mes(B->bin, sampling_fs, &B->amp, &B->freq, 2);
 
-    a_3_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    a_5_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_3_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_5_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    a3_bin = A->bin * 3U;
+    a5_bin = A->bin * 5U;
+    b3_bin = B->bin * 3U;
+    b5_bin = B->bin * 5U;
 
-    if (a_3_index == B->bin)
+    a3_ratio = harmonic_ratio_near(fft_mag, A->bin, a3_bin, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    a5_ratio = harmonic_ratio_near(fft_mag, A->bin, a5_bin, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b3_ratio = harmonic_ratio_near(fft_mag, B->bin, b3_bin, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b5_ratio = harmonic_ratio_near(fft_mag, B->bin, b5_bin, HARMONIC_SEARCH_HALF_WIDTH, 0);
+
+    a3_overlaps_b_base = bins_near(a3_bin, B->bin, BIN_MATCH_TOLERANCE);
+    a5_overlaps_b3 = bins_near(a5_bin, b3_bin, BIN_MATCH_TOLERANCE);
+
+    if (a3_overlaps_b_base != 0U)
     {
-        if (a_5_index < FFT_LEN / 2 - 1 && FFT_mag[a_5_index] / FFT_mag[A->bin] > TRI_5TH_RATIO_THRESHOLD)
-        {
-            A->type = WAVE_TRIANGLE;
-            B->type = WAVE_SINE;
-        }
-        else
-        {
-            A->type = WAVE_SINE;
-            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
-            {
-                B->type = WAVE_TRIANGLE;
-            }
-            else
-            {
-                B->type = WAVE_SINE;
-            }
-        }
+        A->type = classify_by_ratio(a5_ratio, TRI_5TH_RATIO_THRESHOLD);
+        B->type = classify_b_by_3rd(b3_ratio);
     }
-    else if (a_5_index == B->bin)
+    else if (a3_ratio > TRI_3RD_RATIO_THRESHOLD)
     {
-        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        A->type = WAVE_TRIANGLE;
+
+        if (a5_overlaps_b3 != 0U)
         {
-            A->type = WAVE_TRIANGLE;
-            B->type = WAVE_SINE;
+            B->type = classify_b_by_5th_or_fallback(b5_bin, b5_ratio, b3_ratio);
         }
         else
         {
-            A->type = WAVE_SINE;
-            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
-            {
-                B->type = WAVE_TRIANGLE;
-            }
-            else
-            {
-                B->type = WAVE_SINE;
-            }
+            B->type = classify_b_by_3rd(b3_ratio);
         }
     }
-    else if (a_5_index == b_3_index)
+    else
     {
-        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
-        {
-            A->type = WAVE_TRIANGLE;
-            B->type = WAVE_SINE;
-        }
-        else
-        {
-            A->type = WAVE_SINE;
-            if (b_5_index < FFT_LEN / 2 - 1 && FFT_mag[b_5_index] / FFT_mag[B->bin] > TRI_5TH_RATIO_THRESHOLD)
-            {
-                B->type = WAVE_TRIANGLE;
-            }
-            else
-            {
-                B->type = WAVE_SINE;
-            }
-        }
+        A->type = WAVE_SINE;
+        B->type = classify_b_by_3rd(b3_ratio);
     }
-    else{
-        if(a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
-        {
-            A->type = WAVE_TRIANGLE;
-            B->type = WAVE_SINE;
-        }
-        else
-        {
-            A->type = WAVE_SINE;
-            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
-            {
-                B->type = WAVE_TRIANGLE;
-            }
-            else
-            {
-                B->type = WAVE_SINE;
-            }
-        }
-    }
+
     HMI_send_string("t5", (A->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
     HMI_send_string("t6", (B->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
 }
