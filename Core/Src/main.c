@@ -55,6 +55,9 @@
 
 volatile uint8_t adc_half_ready = 0;
 volatile uint8_t adc_full_ready = 0;
+volatile int32_t adc_ready_offset = -1;
+volatile uint64_t adc_sample_count = 0;
+volatile uint64_t adc_ready_sample_start = 0;
 uint16_t ADC_C[ADC_LEN] = {0};
 uint8_t ADC_flag = 0;
 /* USER CODE END PV */
@@ -106,7 +109,7 @@ int main(void)
     MX_DAC1_Init();
     /* USER CODE BEGIN 2 */
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC_C, ADC_LEN);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC_C, ADC_LEN);
     HAL_TIM_Base_Start(&htim8);
     State_Init();
     My_Usart_Init();
@@ -116,9 +119,7 @@ int main(void)
     /* USER CODE BEGIN WHILE */
     while (1)
     {
-        My_Usart_Init();
         State_Proc();
-   
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
@@ -190,6 +191,9 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
     if (hadc == &hadc1)
     {
         adc_half_ready = 1;
+        adc_sample_count += (ADC_LEN / 2U);
+        adc_ready_offset = 0;
+        adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
     }
 }
 
@@ -198,6 +202,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     if (hadc == &hadc1)
     {
         adc_full_ready = 1;
+        adc_sample_count += (ADC_LEN / 2U);
+        adc_ready_offset = (int32_t)(ADC_LEN / 2U);
+        adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
     }
 }
 /* USER CODE END 4 */

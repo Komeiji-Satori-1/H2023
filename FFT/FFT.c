@@ -1,58 +1,58 @@
 #include "FFT.h"
+#include <stdlib.h>
+#include <string.h>
 
 /* -----------------------------------------------------------------------
  * 宏定义
  * ----------------------------------------------------------------------- */
-#define FFT_LEN 1024 // FFT 点数，必须是2的幂
-
-
 
 /* 变量 */
-uint8_t ifftFlag = 0; 
+uint8_t ifftFlag = 0;
 int BaseIdx = 0; // 基波下标
 
-float FFT_Output[FFT_LEN]; 
-float FFT_Input[FFT_LEN*2]; 
+float FFT_Output[FFT_LEN];
+float FFT_Input[FFT_LEN * 2];
 float IFFT_Output[FFT_LEN];
 float FFT_mag[FFT_LEN];
 
-uint8_t EnableWindow=1; // 是否加窗
-float Window_OutputBuffer[ADC_LEN]; // 窗函数输出缓冲
+uint8_t EnableWindow = 1;           // 是否加窗
+float Window_OutputBuffer[FFT_LEN]; // 窗函数输出缓冲
 
-float FFT_Freq = 0;  // 当前帧 FFT 计算得到的基波频率 (Hz)
-float DC = 0;        // 直流偏置（各采样点均值），FFT 前去除以消除直流分量
+float FFT_Freq = 0;             // 当前帧 FFT 计算得到的基波频率 (Hz)
+float DC = 0;                   // 直流偏置（各采样点均值），FFT 前去除以消除直流分量
 float FFT_mag_max = 0;          // 幅度谱峰值（归一化后）
 uint32_t FFT_mag_max_index = 0; // 幅度谱峰值所在 bin 下标
 
 static float window_power_correction = 1.0f; // 窗函数幅值补偿系数（Flat Top≈4.63867）
-float fs = 200000.0f;//200k
+float fs = 1025641.0f;
 
-//串口调试
-void showdata(float *buffer, uint16_t n){
-     for(uint8_t i=0;i<n;i++){
+// 串口调试
+void showdata(float *buffer, uint16_t n)
+{
+    for (uint8_t i = 0; i < n; i++)
+    {
         printf("%.3f ", buffer[i]);
-     }
+    }
 }
-
 
 float Calculate_DC_Value(uint16_t *ADC_Buffer)
 {
     uint32_t sum = 0;
 
-    for (uint16_t i = 0; i < 1024; i++)
+    for (uint16_t i = 0; i < FFT_LEN; i++)
     {
         sum += ADC_Buffer[i];
     }
 
-    return (float)sum / 1024.0f;
+    return (float)sum / (float)FFT_LEN;
 }
 
-
-//等效采樣換算頻率
+// 等效采樣換算頻率
 void FFT_SetSampling(float sampling_freq)
 {
-    if(sampling_freq >1.0f) {
-        fs=sampling_freq; 
+    if (sampling_freq > 1.0f)
+    {
+        fs = sampling_freq;
     }
 }
 
@@ -70,36 +70,35 @@ void Process_FFT_mag(float *FFT_mag, float *FFT_mag_max, uint32_t *FFT_mag_max_i
     *FFT_Ampl = *FFT_mag_max;
 }
 
-
 void FFT_Process(uint16_t *ADC_Buffer, float *FFT_Ampl)
 {
-	/*
-	arm_rfft_fast_instance_f32 S;
-	arm_rfft_fast_init_f32(&S, FFT_LEN);
-	
-	ifftFlag = 0; 
-	for(int i=0; i<FFT_LEN; i++)
-	{
-		FFT_Input[i] = ADC_Buffer[i]*Window_OutputBuffer[i];
-	}
-	arm_rfft_fast_f32(&S, FFT_Input, FFT_Output, ifftFlag);
-	*/
-	uint32_t adc_sum = 0;
+    /*
+    arm_rfft_fast_instance_f32 S;
+    arm_rfft_fast_init_f32(&S, FFT_LEN);
+
+    ifftFlag = 0;
+    for(int i=0; i<FFT_LEN; i++)
+    {
+        FFT_Input[i] = ADC_Buffer[i]*Window_OutputBuffer[i];
+    }
+    arm_rfft_fast_f32(&S, FFT_Input, FFT_Output, ifftFlag);
+    */
+    uint32_t adc_sum = 0;
     float *ampl;
     ampl = FFT_Ampl;
 
-    //清空缓存区
+    // 清空缓存区
     memset(FFT_Input, 0, sizeof(FFT_Input));
     memset(FFT_mag, 0, sizeof(FFT_mag));
     memset(FFT_Output, 0, sizeof(FFT_Output));
-    //printf("clear cache\n");
-    // 计算均值（直流偏置），后续减去以消除 DC 分量 
+    // printf("clear cache\n");
+    //  计算均值（直流偏置），后续减去以消除 DC 分量
     DC = Calculate_DC_Value(ADC_Buffer);
-  
+
     window();
 
-    //去直流 + 加窗，虚部置0
-    for (int i = 0; i < ADC_LEN; i++)
+    // 去直流 + 加窗，虚部置0
+    for (int i = 0; i < FFT_LEN; i++)
     {
         FFT_Input[i * 2] = ((float)ADC_Buffer[i] - DC) * Window_OutputBuffer[i];
         FFT_Input[i * 2 + 1] = 0.0f;
@@ -110,7 +109,7 @@ void FFT_Process(uint16_t *ADC_Buffer, float *FFT_Ampl)
     // 计算幅度谱
     arm_cmplx_mag_f32(FFT_Input, FFT_mag, FFT_LEN);
 
-    // 归一化 + 窗函数功率补偿 
+    // 归一化 + 窗函数功率补偿
     for (uint16_t i = 0; i < FFT_LEN; i++)
     {
         if (i == 0)
@@ -119,41 +118,37 @@ void FFT_Process(uint16_t *ADC_Buffer, float *FFT_Ampl)
             FFT_mag[i] = FFT_mag[i] * 2.0f / FFT_LEN * window_power_correction;
     }
 
-    //求幅度 矫正
+    // 求幅度 矫正
     Process_FFT_mag(FFT_mag, &FFT_mag_max, &FFT_mag_max_index, ampl);
     ADC_FFT_Get_Wave_Mes(FFT_mag_max_index, fs, ampl, &FFT_Freq, 2);
-  // *index = FFT_mag_max_index;
-
+    // *index = FFT_mag_max_index;
 }
-
-
 
 void IFFT_Process(void)
 {
-	/*
-	arm_rfft_fast_instance_f32 S;
-	arm_rfft_fast_init_f32(&S, FFT_LEN);
+    /*
+    arm_rfft_fast_instance_f32 S;
+    arm_rfft_fast_init_f32(&S, FFT_LEN);
 
     ifftFlag = 1;
-	arm_rfft_fast_f32(&S, FFT_Output, IFFT_Output, ifftFlag);
-	*/
+    arm_rfft_fast_f32(&S, FFT_Output, IFFT_Output, ifftFlag);
+    */
     arm_cfft_f32(&arm_cfft_sR_f32_len1024, FFT_Input, 1, 1);
 
     // 提取实部作为 IFFT 输出
-    for (int i = 0; i < FFT_LEN; i++) {
-        IFFT_Output[i] = FFT_Input[2*i];  // 取实部
+    for (int i = 0; i < FFT_LEN; i++)
+    {
+        IFFT_Output[i] = FFT_Input[2 * i]; // 取实部
     }
 }
-
-
 
 void window(void)
 {
     if (EnableWindow)
     {
-        for (int i = 0; i < ADC_LEN; i++)
+        for (int i = 0; i < FFT_LEN; i++)
         {
-            float tempCos = cosf(2.0f * PI * i / (ADC_LEN - 1));
+            float tempCos = cosf(2.0f * PI * i / (FFT_LEN - 1));
             Window_OutputBuffer[i] = 0.5f * (1.0f - tempCos);
         }
         /* 窗函数增益系数*/
@@ -161,7 +156,7 @@ void window(void)
     }
     else
     {
-        for (int i = 0; i < ADC_LEN; i++)
+        for (int i = 0; i < FFT_LEN; i++)
         {
             Window_OutputBuffer[i] = 1.0f;
         }
@@ -174,8 +169,10 @@ void Find_BaseIndex(void)
 {
     BaseIdx = 0;
     float max_val = 0;
-    for (int i = 2; i < FFT_LEN / 2; i++) { // 遍历 0 ~ Fs/2 部分
-        if (FFT_Output[i] > max_val) {
+    for (int i = 2; i < FFT_LEN / 2; i++)
+    { // 遍历 0 ~ Fs/2 部分
+        if (FFT_Output[i] > max_val)
+        {
             max_val = FFT_Output[i];
             BaseIdx = i; // 记录基波的索引
         }
@@ -216,7 +213,7 @@ void ADC_FFT_Get_Wave_Mes(uint32_t FFT_mag_max_index, float fs, float *FFT_Ampl,
     *FFT_Ampl = sqrtf(DatePower2);
 }
 
-//单频点DFT
+// 单频点DFT
 #define DFT_PI 3.14159265358979323846f
 
 void FFT_SingleFreqDFT_U16(const uint16_t *adc_buf,
@@ -252,11 +249,17 @@ void FFT_SingleFreqDFT_U16(const uint16_t *adc_buf,
         real += sample * cosf(angle);
         imag -= sample * sinf(angle);
     }
-
     result->real = real;
     result->imag = imag;
     result->mag = 2.0f * sqrtf(real * real + imag * imag) / (float)len;
-    result->phase = atan2f(imag, real);
+
+    /*
+     * 当前 DFT 使用 e^(-j*w*n)，atan2(imag, real) 得到的是余弦参考相位。
+     * NCO 查表使用 sin(phase)，所以这里补偿 +90 度，
+     * 把 DFT 相位转换成和 NCO 正弦查表一致的相位定义。
+     */
+    result->phase = atan2f(imag, real) + DFT_PI * 0.5f;
+
 }
 
 void FFT_CalcTransfer(const FFT_SingleFreqResult_t *input,

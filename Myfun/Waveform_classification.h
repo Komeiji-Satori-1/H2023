@@ -3,6 +3,7 @@
 
 #include "FFT.h"
 #include "math.h"
+#include "HMI.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -25,6 +26,7 @@ typedef struct
 extern SignalInfo A;
 extern SignalInfo B;
 
+void Waveform_SetAdcFrame(const uint16_t *adc_buf);
 void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B);
 void test(void);
 

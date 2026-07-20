@@ -1,8 +1,9 @@
 #MicroXplorer Configuration settings - do not modify
 ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_16
+ADC1.ContinuousConvMode=DISABLE
 ADC1.ConversionDataManagement=ADC_CONVERSIONDATA_DMA_CIRCULAR
 ADC1.ExternalTrigConv=ADC_EXTERNALTRIG_T8_TRGO
-ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,OffsetNumber-0\#ChannelRegularConversion,OffsetSignedSaturation-0\#ChannelRegularConversion,NbrOfConversionFlag,master,ExternalTrigConv,ConversionDataManagement
+ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,OffsetNumber-0\#ChannelRegularConversion,OffsetSignedSaturation-0\#ChannelRegularConversion,NbrOfConversionFlag,master,ExternalTrigConv,ConversionDataManagement,ContinuousConvMode
 ADC1.NbrOfConversionFlag=1
 ADC1.OffsetNumber-0\#ChannelRegularConversion=ADC_OFFSET_NONE
 ADC1.OffsetSignedSaturation-0\#ChannelRegularConversion=DISABLE
@@ -275,7 +276,7 @@ SH.COMP_DAC12_group.0=DAC1_OUT2,DAC_OUT2
 SH.COMP_DAC12_group.ConfNb=1
 STMicroelectronics.X-CUBE-ALGOBUILD.1.2.1_SwParameter=LibraryCcDSPOoLibraryJjDSPOoLibrary\:true;
 TIM8.IPParameters=TIM_MasterOutputTrigger,Period
-TIM8.Period=160-1
+TIM8.Period=234-1
 TIM8.TIM_MasterOutputTrigger=TIM_TRGO_UPDATE
 USART1.IPParameters=VirtualMode-Asynchronous
 USART1.VirtualMode-Asynchronous=VM_ASYNC

@@ -65,7 +65,8 @@ void Error_Handler(void);
 #define DAC_B_Pin GPIO_PIN_5
 #define DAC_B_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
-#define ADC_LEN 2048
+#define FFT_LEN 1024 // FFT 点数，必须是2的幂
+#define ADC_LEN (FFT_LEN*2)
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

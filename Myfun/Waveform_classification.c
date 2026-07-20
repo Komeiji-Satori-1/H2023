@@ -1,7 +1,5 @@
 #include "Waveform_classification.h"
 
-#define ADC_LEN 1024
-#define FFT_LEN 1024
 #define PEAK_GUARD 5U
 #define HARMONIC_SEARCH_HALF_WIDTH 2U
 #define TRI_3RD_RATIO_THRESHOLD 0.08f
@@ -10,15 +8,26 @@
 #define FFT_LAST_BIN (FFT_HALF_BIN - 1U)
 #define MAG_EPSILON 1.0e-12f
 
-extern uint16_t ADC_UA[ADC_LEN];
-extern uint16_t ADC_UB[ADC_LEN];
-extern uint16_t ADC_UC[ADC_LEN];
+extern uint16_t ADC_C[ADC_LEN];
 extern float fs;
 extern float FFT_mag[FFT_LEN];
 extern float FFT_Input[FFT_LEN * 2];
 
 SignalInfo A;
 SignalInfo B;
+static const uint16_t *s_adc_frame = ADC_C;
+
+void Waveform_SetAdcFrame(const uint16_t *adc_buf)
+{
+    if (adc_buf != 0)
+    {
+        s_adc_frame = adc_buf;
+    }
+    else
+    {
+        s_adc_frame = ADC_C;
+    }
+}
 
 static uint32_t clamp_bin(int32_t bin)
 {
@@ -136,14 +145,14 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
     float uc_amp;
     float max1 = 0.0f;
     float max2 = 0.0f;
-    uint16_t index1 = 0U;
-    uint16_t index2 = 0U;
+    uint32_t index1 = 0U;
+    uint32_t index2 = 0U;
     float a_3_ratio;
     float a_5_ratio;
     float b_3_ratio;
     float b_5_ratio;
 
-    FFT_Process(ADC_UC, &uc_amp);
+    FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
 
     if ((fft_mag == 0) || (A == 0) || (B == 0))
     {
@@ -203,9 +212,11 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
     A->type = ((a_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (a_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
               ? WAVE_TRIANGLE
               : WAVE_SINE;
+    HMI_send_string("t5", (A->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
     B->type = ((b_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (b_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
               ? WAVE_TRIANGLE
               : WAVE_SINE;
+    HMI_send_string("t6", (B->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
 }
 
 void test(void)

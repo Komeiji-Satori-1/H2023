@@ -1,6 +1,10 @@
 #include "state.h"
 #include "calculate.h"
 #include "command.h"
+#include "FFT.h"
+#include "Waveform_classification.h"
+#include "dac_nco.h"
+#include <string.h>
 
 #define HMI_CMD_A1 0xA1
 #define HMI_CMD_A2 0xA2
@@ -9,23 +13,33 @@
 #define STATE_DEFAULT_FREQ 1000
 #define STATE_DEFAULT_VOUT 1.0f
 #define STATE_PHASE_MAX_DEG 180U
+#define STATE_FRAME_LEN 1024U
+#define STATE_ADC_WAIT_TIMEOUT_MS 100U
+#define STATE_ADC_FS_HZ 1025641.0f
 
 extern uint16_t ADC_C[ADC_LEN];
+extern volatile int32_t adc_ready_offset;
+extern volatile uint64_t adc_sample_count;
+extern volatile uint64_t adc_ready_sample_start;
+extern SignalInfo A;
+extern SignalInfo B;
 
 typedef enum
 {
     STATE_IDLE = 0,
     STATE_CHECK_HMI,
-    STATE_CALC_DES,
+    STATE_SEPARATE_START,
+    STATE_TRACK,
     STATE_CALC_PHASE,
 } State_t;
 
 static State_t state = STATE_IDLE;
-
 static uint8_t separate_request = 0;
 static uint8_t separate_active = 0;
 static uint8_t phase_ready = 0;
 static uint16_t phase_deg = 0;
+static uint16_t adc_frame[STATE_FRAME_LEN];
+static uint64_t adc_frame_sample_start = 0;
 
 uint16_t freq = STATE_DEFAULT_FREQ;
 float vout = STATE_DEFAULT_VOUT;
@@ -40,32 +54,135 @@ static uint16_t State_LimitPhase(uint32_t value)
     return (uint16_t)value;
 }
 
+static uint8_t State_TakeReadyAdcFrame(uint16_t *dst,
+                                       uint16_t len,
+                                       uint64_t *sample_start,
+                                       uint32_t timeout_ms)
+{
+    uint32_t tick_start;
+    int32_t ready_offset;
+    uint64_t ready_sample_start;
+
+    if ((dst == NULL) || (sample_start == NULL) ||
+        (len != STATE_FRAME_LEN) || (ADC_LEN < (STATE_FRAME_LEN * 2U)))
+    {
+        return 0;
+    }
+
+    tick_start = HAL_GetTick();
+
+    do
+    {
+        __disable_irq();
+        ready_offset = adc_ready_offset;
+        ready_sample_start = adc_ready_sample_start;
+        adc_ready_offset = -1;
+        __enable_irq();
+
+        if ((ready_offset == 0) || (ready_offset == (int32_t)STATE_FRAME_LEN))
+        {
+            memcpy(dst, &ADC_C[ready_offset], len * sizeof(uint16_t));
+            *sample_start = ready_sample_start;
+            return 1;
+        }
+    } while ((timeout_ms != 0U) && ((HAL_GetTick() - tick_start) < timeout_ms));
+
+    return 0;
+}
+
+static uint8_t State_CopyStableAdcFrame(uint16_t *dst, uint16_t len)
+{
+    return State_TakeReadyAdcFrame(dst,
+                                   len,
+                                   &adc_frame_sample_start,
+                                   STATE_ADC_WAIT_TIMEOUT_MS);
+}
+
+static void State_MeasureDftInfo(uint16_t *frame)
+{
+    FFT_SingleFreqResult_t dft_a;
+    FFT_SingleFreqResult_t dft_b;
+
+    FFT_SingleFreqDFT_U16(frame, STATE_FRAME_LEN, STATE_ADC_FS_HZ, A.freq, &dft_a);
+    FFT_SingleFreqDFT_U16(frame, STATE_FRAME_LEN, STATE_ADC_FS_HZ, B.freq, &dft_b);
+
+    A.amp = dft_a.mag;
+    A.phase = dft_a.phase;
+    B.amp = dft_b.mag;
+    B.phase = dft_b.phase;
+}
+
+static void State_UpdateNcoLock(uint64_t sample_start)
+{
+    DacNco_UpdateComponent(0U, &A);
+    DacNco_UpdateComponent(1U, &B);
+    DacNco_PllUpdate(0U, A.phase, sample_start);
+    DacNco_PllUpdate(1U, B.phase, sample_start);
+}
+
 static void State_StartSeparate(void)
 {
+    uint64_t dac_start_sample;
+
     separate_request = 0;
-    separate_active = 1;
+    separate_active = 0;
     phase_ready = 0;
-    (void)phase_deg;
+
+    DacNco_Stop();
+
+    if (!State_CopyStableAdcFrame(adc_frame, STATE_FRAME_LEN))
+    {
+        return;
+    }
+
+    FFT_SetSampling(STATE_ADC_FS_HZ);
+    Waveform_SetAdcFrame(adc_frame);
+    test();
+    State_MeasureDftInfo(adc_frame);
+
+    DacNco_Config(&A, &B, phase_deg);
 
     /*
-     * TODO:
-     * 1. Copy a stable ADC frame from the DMA buffer.
-     * 2. Run FFT/DFT to identify A and B.
-     * 3. Generate DAC_A/DAC_B output buffers by NCO with phase_deg.
-     * 4. Start DAC DMA output.
+     * CODEx 修改：
+     * 单频 DFT 测得的 A/B 相位属于 adc_frame_sample_start 这一条 ADC 时间轴位置，
+     * 所以先把 NCO 的 phase_ref/sample_ref 锚定到这帧 ADC 的起点。
      */
+    DacNco_SetReferenceSample(adc_frame_sample_start);
+
+    /*
+     * CODEx 修改：
+     * DAC 真正开始输出时已经晚于 adc_frame_sample_start。
+     * 这里读取当前 ADC 已完成采样计数，把 DAC 第一个输出点对齐到“当前 ADC 时间”，
+     * 避免用过去那帧的相位直接起播导致锁不住相。
+     */
+    __disable_irq();
+    dac_start_sample = adc_sample_count;
+    __enable_irq();
+
+    DacNco_StartAtSample(dac_start_sample);
+
+    separate_active = 1;
+}
+
+static void State_TrackSeparate(void)
+{
+    uint64_t sample_start = 0;
+
+    DacNco_Task();
+
+    if (!State_TakeReadyAdcFrame(adc_frame, STATE_FRAME_LEN, &sample_start, 0U))
+    {
+        return;
+    }
+
+    State_MeasureDftInfo(adc_frame);
+    State_UpdateNcoLock(sample_start);
 }
 
 static void State_UpdatePhase(void)
 {
     phase_ready = 0;
-    (void)phase_deg;
-
-    /*
-     * TODO:
-     * Use phase_deg to rebuild or shift the B' DAC buffer.
-     * A' is the reference phase, B' should output phase_deg degrees ahead.
-     */
+    DacNco_UpdatePhase(phase_deg);
 }
 
 static void State_HandleHmiData(uint8_t head, uint32_t value)
@@ -131,11 +248,15 @@ void State_Proc(void)
 
         if (separate_request)
         {
-            state = STATE_CALC_DES;
+            state = STATE_SEPARATE_START;
         }
         else if (separate_active && phase_ready)
         {
             state = STATE_CALC_PHASE;
+        }
+        else if (separate_active)
+        {
+            state = STATE_TRACK;
         }
         else
         {
@@ -157,13 +278,21 @@ void State_Proc(void)
         state = STATE_CHECK_HMI;
         break;
 
-    case STATE_CALC_DES:
+    case STATE_SEPARATE_START:
+        State_StartSeparate();
+        state = STATE_CHECK_HMI;
+        break;
+
+    case STATE_TRACK:
         if (separate_request)
         {
-            State_StartSeparate();
+            state = STATE_SEPARATE_START;
         }
-
-        state = STATE_CHECK_HMI;
+        else
+        {
+            State_TrackSeparate();
+            state = STATE_CHECK_HMI;
+        }
         break;
 
     default:

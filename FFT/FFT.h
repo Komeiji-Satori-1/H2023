@@ -1,3 +1,6 @@
+#ifndef __FFT_H__
+#define __FFT_H__
+
 #include "arm_math.h"
 #include "arm_const_structs.h"
 #include "math.h"
@@ -23,6 +26,7 @@ typedef struct
     float phase;
 } FFT_TransferResult_t;
 
+
 void FFT_SingleFreqDFT_U16(const uint16_t *adc_buf,
                            uint16_t len,
                            float fs,
@@ -42,3 +46,6 @@ void Process_FFT_mag(float *FFT_mag, float *FFT_mag_max, uint32_t *FFT_mag_max_i
 void showdata(float *buffer, uint16_t n);
 void FFT_SetSampling(float sampling_freq);
 float Calculate_DC_Value(uint16_t *ADC_Buffer);
+
+
+#endif /* __FFT_H__ */
