@@ -147,10 +147,10 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
     float max2 = 0.0f;
     uint32_t index1 = 0U;
     uint32_t index2 = 0U;
-    float a_3_ratio;
-    float a_5_ratio;
-    float b_3_ratio;
-    float b_5_ratio;
+    uint32_t a_3_index;
+    uint32_t a_5_index;
+    uint32_t b_3_index;
+    uint32_t b_5_index;
 
     FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
 
@@ -204,18 +204,91 @@ void wavetypedetect(const float *fft_mag, float fs, SignalInfo *A, SignalInfo *B
     ADC_FFT_Get_Wave_Mes(A->bin, fs, &A->amp, &A->freq, 2);
     ADC_FFT_Get_Wave_Mes(B->bin, fs, &B->amp, &B->freq, 2);
 
-    a_3_ratio = harmonic_ratio_near(fft_mag, A->bin, A->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    a_5_ratio = harmonic_ratio_near(fft_mag, A->bin, A->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_3_ratio = harmonic_ratio_near(fft_mag, B->bin, B->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
-    b_5_ratio = harmonic_ratio_near(fft_mag, B->bin, B->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    a_3_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    a_5_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b_3_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b_5_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
 
-    A->type = ((a_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (a_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
-              ? WAVE_TRIANGLE
-              : WAVE_SINE;
+    if (a_3_index == B->bin)
+    {
+        if (a_5_index < FFT_LEN / 2 - 1 && FFT_mag[a_5_index] / FFT_mag[A->bin] > TRI_5TH_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    else if (a_5_index == B->bin)
+    {
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    else if (a_5_index == b_3_index)
+    {
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_5_index < FFT_LEN / 2 - 1 && FFT_mag[b_5_index] / FFT_mag[B->bin] > TRI_5TH_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    else{
+        if(a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
     HMI_send_string("t5", (A->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
-    B->type = ((b_3_ratio >= TRI_3RD_RATIO_THRESHOLD) || (b_5_ratio >= TRI_5TH_RATIO_THRESHOLD))
-              ? WAVE_TRIANGLE
-              : WAVE_SINE;
     HMI_send_string("t6", (B->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
 }
 

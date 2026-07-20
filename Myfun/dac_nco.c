@@ -151,7 +151,19 @@ static void DacNco_BuildTables(void)
         s_sine_table[i] = (int16_t)(sine_val * 32767.0f);
 
         phase = (float)i / (float)DAC_NCO_TABLE_LEN;
-        triangle_val = 1.0f - (4.0f * fabsf(phase - 0.5f));
+        if (phase < 0.25f)
+        {
+            triangle_val = 4.0f * phase;
+        }
+        else if (phase < 0.75f)
+        {
+            triangle_val = 2.0f - 4.0f * phase;
+        }
+        else
+        {
+            triangle_val = -4.0f + 4.0f * phase;
+        }
+        //    triangle_val = 1.0f - (4.0f * fabsf(phase - 0.5f));
         s_triangle_table[i] = (int16_t)(triangle_val * 32767.0f);
     }
 
