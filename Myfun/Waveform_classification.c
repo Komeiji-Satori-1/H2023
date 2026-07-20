@@ -143,12 +143,23 @@ static float harmonic_ratio_near(const float *mag,
 void wavetypedetect(float *FFT_mag, float fs, SignalInfo *A, SignalInfo *B)
 {
     float uc_amp;
-    FFT_Process(ADC_UC, &uc_amp);
+    float max1 = 0.0f;
+    float max2 = 0.0f;
+    uint32_t index1 = 0U;
+    uint32_t index2 = 0U;
+    uint32_t a_3_index;
+    uint32_t a_5_index;
+    uint32_t b_3_index;
+    uint32_t b_5_index;
 
-    // 找两个峰 最大和次大
-    float max1 = 0.0f, max2 = 0.0f;
-    uint16_t index1 = 0, index2 = 0;
-    for (uint16_t i = 2; i < FFT_LEN / 2 - 1; i++)
+    FFT_Process((uint16_t *)s_adc_frame, &uc_amp);
+
+    if ((fft_mag == 0) || (A == 0) || (B == 0))
+    {
+        return;
+    }
+
+    for (uint32_t i = 2U; i < FFT_HALF_BIN - 1U; i++)
     {
         if (FFT_mag[i] > FFT_mag[i - 1] && FFT_mag[i] > FFT_mag[i + 1])
         {
@@ -189,120 +200,95 @@ void wavetypedetect(float *FFT_mag, float fs, SignalInfo *A, SignalInfo *B)
     ADC_FFT_Get_Wave_Mes(A->bin, fs, &A->amp, &A->freq, 2);
     ADC_FFT_Get_Wave_Mes(B->bin, fs, &B->amp, &B->freq, 2);
 
-    // 波形判断
-    uint16_t a_3_index = A->bin * 3;
-    uint16_t b_3_index = B->bin * 3;
-    uint16_t a_5_index = A->bin * 5;
-    uint16_t b_5_index = B->bin * 5;
+    a_3_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    a_5_index = harmonic_ratio_near(fft_mag, A->bin, A->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b_3_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 3U, HARMONIC_SEARCH_HALF_WIDTH, 0);
+    b_5_index = harmonic_ratio_near(fft_mag, B->bin, B->bin * 5U, HARMONIC_SEARCH_HALF_WIDTH, 0);
 
-    //float a_3_ratio = FFT_mag[a_3_index] / FFT_mag[A->bin];
-    //if (a_3_ratio > 0.08f)
-    //{
-    //    A->type = WAVE_TRIANGLE;
-    //    B->type = WAVE_SINE;
-    //}
-    //else
-    //{
-    //    if (B->bin * 3 < FFT_LEN / 2 && FFT_mag[b_3_index] / FFT_mag[B->bin] > 0.08f)
-    //    {
-    //        A->type = WAVE_SINE;
-    //        B->type = WAVE_TRIANGLE;
-    //    }
-    //    else
-    //    {
-    //        A->type = WAVE_SINE;
-    //        B->type = WAVE_SINE;
-    //    }
-    //}
-
-    
-    // 注：以下是我写的部分，根据题意，只有一个三角波因此判断A为三角波后B必定为正弦。而判断A为正弦后B的类型判断没写
-    if (FFT_mag[a_3_index] > 0)
+    if (a_3_index == B->bin)
     {
-        if (a_3_index == B->bin)
-        {
-            if (FFT_mag[a_5_index] > 0.0f)
-            {
-                if (FFT_mag[a_5_index] / FFT_mag[A->bin] > 0.02f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
-            }
-            else
-            {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
-            }
-        }
-        else
+        if (a_5_index < FFT_LEN / 2 - 1 && FFT_mag[a_5_index] / FFT_mag[A->bin] > TRI_5TH_RATIO_THRESHOLD)
         {
             A->type = WAVE_TRIANGLE;
             B->type = WAVE_SINE;
         }
-    }
-    //此分支应当为A三次谐波幅值为零、五次谐波幅值不为零的情况，但是前面没加return所以有bug
-    else if (FFT_mag[a_5_index] > 0)
-    {
-        if (a_5_index == B->bin)
+        else
         {
-            if (FFT_mag[a_3_index] > 0.0f)
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
             {
-                //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
-                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
+                B->type = WAVE_TRIANGLE;
             }
             else
             {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
+                B->type = WAVE_SINE;
             }
         }
-        else if (a_5_index == B->bin * 3)
+    }
+    else if (a_5_index == B->bin)
+    {
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
         {
-            //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
-            if (FFT_mag[a_3_index] > 0.0f)
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
             {
-                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
+                B->type = WAVE_TRIANGLE;
             }
             else
             {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
+                B->type = WAVE_SINE;
             }
         }
     }
-    // A的三次谐波无幅值且五次谐波无幅值才会进入else但是前面没加return所以有bug
-    else
+    else if (a_5_index == b_3_index)
     {
-        //等你补充
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_5_index < FFT_LEN / 2 - 1 && FFT_mag[b_5_index] / FFT_mag[B->bin] > TRI_5TH_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
     }
+    else{
+        if(a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    HMI_send_string("t5", (A->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
+    HMI_send_string("t6", (B->type == WAVE_TRIANGLE) ? "Triangle" : "Sine");
 }
 
-
-void test()
+void test(void)
 {
     wavetypedetect(FFT_mag, fs, &A, &B);
 }
