@@ -54,6 +54,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+uint8_t Acquire_All_ADC_Samples_Blocking(uint32_t timeout_ms);
 
 /* USER CODE END EFP */
 

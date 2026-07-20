@@ -10,11 +10,11 @@
 #define AD9833_FLL_MAX_FREQ_HZ 1000000.0f
 #define AD9833_FLL_LOCK_MIN_BIN 2U
 #define AD9833_FLL_LOCK_MIN_MAG 1.0f
-#define AD9833_FLL_PID_KP 10.0f
-#define AD9833_FLL_PID_KI 0.08f
-#define AD9833_FLL_PID_KD 0.01f
-#define AD9833_FLL_PID_I_MAX 20.0f
-#define AD9833_FLL_PID_OUT_MAX 100.0f
+#define AD9833_FLL_PID_KP 22.0f
+#define AD9833_FLL_PID_KI 0.0f
+#define AD9833_FLL_PID_KD 0.0f
+#define AD9833_FLL_PID_I_MAX 2000.0f
+#define AD9833_FLL_PID_OUT_MAX 5000.0f
 #define AD9833_FLL_FREQ_OFFSET_A 0.0f
 #define AD9833_FLL_FREQ_OFFSET_B 0.0f
 
@@ -176,7 +176,7 @@ static void Ad9833Fll_SingleBinDft(const uint16_t *adc_buf,
     result->real = real;
     result->imag = imag;
     result->mag = 2.0f * sqrtf(real * real + imag * imag) / (float)len;
-    result->phase = atan2f(real, imag);
+    result->phase = atan2f(imag, real) + AD9833_FLL_PI * 0.5f;
 }
 
 static void Ad9833Fll_AnalyseFrame(const uint16_t *frame,
@@ -311,7 +311,7 @@ static void Ad9833Fll_ConfigChannel(uint8_t index,
              AD9833_FLL_PID_KD,
              AD9833_FLL_PID_I_MAX,
              AD9833_FLL_PID_OUT_MAX,
-             0.0f);
+             1.0f);
 }
 
 static void Ad9833Fll_UpdateChannel(uint8_t index,
@@ -332,7 +332,7 @@ static void Ad9833Fll_UpdateChannel(uint8_t index,
         return;
     }
 
-    error = Ad9833Fll_WrapPi(fb->phase - ref->phase);
+    error = Ad9833Fll_WrapPi(ref->phase - fb->phase);
     pid_out = pid_calc(&s_fll[index].pid, 0.0f, error);
     pid_out = Ad9833Fll_LimitFloat(pid_out,
                                    -AD9833_FLL_PID_OUT_MAX,

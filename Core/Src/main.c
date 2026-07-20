@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
-#include "bdma.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -30,6 +29,7 @@
 /* USER CODE BEGIN Includes */
 #include "command.h"
 #include "state.h"
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -50,23 +50,13 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-#define TIM8_COUNTER_CLK_HZ 240000000
-
-volatile uint8_t adc_half_ready = 0;
-volatile uint8_t adc_full_ready = 0;
-volatile int32_t adc_ready_offset = -1;
-volatile uint64_t adc_sample_count = 0;
-volatile uint64_t adc_ready_sample_start = 0;
-volatile int32_t adc_fll_ready_offset = -1;
-volatile uint64_t adc_fll_ready_sample_start = 0;
+volatile uint8_t ADC_Flag = 0U;
+volatile uint8_t adc1_done = 0U;
+volatile uint8_t adc2_done = 0U;
+volatile uint8_t adc3_done = 0U;
 uint16_t ADC_C[ADC_LEN] = {0};
 uint16_t ADC_AD9833_A[ADC_LEN] = {0};
 uint16_t ADC_AD9833_B[ADC_LEN] = {0};
-uint8_t ADC_flag = 0;
-
-static volatile uint8_t adc_half_sync_mask = 0U;
-static volatile uint8_t adc_full_sync_mask = 0U;
-static volatile uint8_t adc_restart_pending = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,66 +68,77 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define ADC_SYNC_C_MASK 0x01U
-#define ADC_SYNC_A_MASK 0x02U
-#define ADC_SYNC_B_MASK 0x04U
-#define ADC_SYNC_ALL_MASK (ADC_SYNC_C_MASK | ADC_SYNC_A_MASK | ADC_SYNC_B_MASK)
-
-static void ADC_StartAllDma(void)
+static void ADC_ResetDoneFlags(void)
 {
-    adc_half_sync_mask = 0U;
-    adc_full_sync_mask = 0U;
+    ADC_Flag = 0U;
+    adc1_done = 0U;
+    adc2_done = 0U;
+    adc3_done = 0U;
+}
+
+static void ADC_StopAllDma(void)
+{
+    HAL_TIM_Base_Stop(&htim8);
+    HAL_ADC_Stop_DMA(&hadc1);
+    HAL_ADC_Stop_DMA(&hadc2);
+    HAL_ADC_Stop_DMA(&hadc3);
+}
+
+uint8_t Acquire_All_ADC_Samples_Blocking(uint32_t timeout_ms)
+{
+    uint32_t tickstart;
+
+    ADC_StopAllDma();
+    ADC_ResetDoneFlags();
+
+    memset(ADC_C, 0, sizeof(ADC_C));
+    memset(ADC_AD9833_A, 0, sizeof(ADC_AD9833_A));
+    memset(ADC_AD9833_B, 0, sizeof(ADC_AD9833_B));
+
+    __HAL_TIM_SET_COUNTER(&htim8, 0U);
 
     if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC_C, ADC_LEN) != HAL_OK)
     {
-        Error_Handler();
+        ADC_StopAllDma();
+        ADC_ResetDoneFlags();
+        return 0U;
     }
 
     if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)ADC_AD9833_A, ADC_LEN) != HAL_OK)
     {
-        Error_Handler();
+        ADC_StopAllDma();
+        ADC_ResetDoneFlags();
+        return 0U;
     }
 
     if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)ADC_AD9833_B, ADC_LEN) != HAL_OK)
     {
-        Error_Handler();
+        ADC_StopAllDma();
+        ADC_ResetDoneFlags();
+        return 0U;
     }
-}
 
-static void ADC_ServiceRestart(void)
-{
-    if (adc_restart_pending == 0U)
+    tickstart = HAL_GetTick();
+    if (HAL_TIM_Base_Start(&htim8) != HAL_OK)
     {
-        return;
+        ADC_StopAllDma();
+        ADC_ResetDoneFlags();
+        return 0U;
     }
 
-    __disable_irq();
-    adc_restart_pending = 0U;
-    __enable_irq();
-
-    ADC_StartAllDma();
-    __HAL_TIM_SET_COUNTER(&htim8, 0U);
-    __HAL_TIM_ENABLE(&htim8);
-}
-
-static uint8_t ADC_SyncMaskFromHandle(ADC_HandleTypeDef *hadc)
-{
-    if (hadc == &hadc1)
+    while (ADC_Flag == 0U)
     {
-        return ADC_SYNC_C_MASK;
+        if ((HAL_GetTick() - tickstart) > timeout_ms)
+        {
+            ADC_StopAllDma();
+            ADC_ResetDoneFlags();
+            return 0U;
+        }
     }
 
-    if (hadc == &hadc2)
-    {
-        return ADC_SYNC_A_MASK;
-    }
-
-    if (hadc == &hadc3)
-    {
-        return ADC_SYNC_B_MASK;
-    }
-
-    return 0U;
+    HAL_TIM_Base_Stop(&htim8);
+    ADC_ResetDoneFlags();
+    return 1U;
 }
 
 /* USER CODE END 0 */
@@ -179,14 +180,15 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_ADC2_Init();
-  MX_BDMA_Init();
   MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
-    ADC_StartAllDma();
-    HAL_TIM_Base_Start(&htim8);
+	HAL_TIM_Base_Start(&htim8);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC_C, ADC_LEN);
+	HAL_ADC_Start_DMA(&hadc2, (uint32_t *)ADC_AD9833_A, ADC_LEN);
+	HAL_ADC_Start_DMA(&hadc3, (uint32_t *)ADC_AD9833_B, ADC_LEN);
     State_Init();
     My_Usart_Init();
   /* USER CODE END 2 */
@@ -195,7 +197,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
     while (1)
     {
-        ADC_ServiceRestart();
         State_Proc();
     /* USER CODE END WHILE */
 
@@ -289,53 +290,27 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    uint8_t sync_mask = ADC_SyncMaskFromHandle(hadc);
-
-    if (hadc == &hadc1)
-    {
-        adc_half_ready = 1;
-        adc_sample_count += (ADC_LEN / 2U);
-        adc_ready_offset = 0;
-        adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
-    }
-
-    if (sync_mask != 0U)
-    {
-        adc_half_sync_mask |= sync_mask;
-        if (adc_half_sync_mask == ADC_SYNC_ALL_MASK)
-        {
-            adc_half_sync_mask = 0U;
-            adc_fll_ready_offset = 0;
-            adc_fll_ready_sample_start = adc_ready_sample_start;
-        }
-    }
-}
-
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-    uint8_t sync_mask = ADC_SyncMaskFromHandle(hadc);
-
     if (hadc == &hadc1)
     {
-        adc_full_ready = 1;
-        adc_sample_count += (ADC_LEN / 2U);
-        adc_ready_offset = (int32_t)(ADC_LEN / 2U);
-        adc_ready_sample_start = adc_sample_count - (ADC_LEN / 2U);
+        HAL_ADC_Stop_DMA(hadc);
+        adc1_done = 1U;
+    }
+    else if (hadc == &hadc2)
+    {
+        HAL_ADC_Stop_DMA(hadc);
+        adc2_done = 1U;
+    }
+    else if (hadc == &hadc3)
+    {
+        HAL_ADC_Stop_DMA(hadc);
+        adc3_done = 1U;
     }
 
-    if (sync_mask != 0U)
+    if ((adc1_done == 1U) && (adc2_done == 1U) && (adc3_done == 1U))
     {
-        adc_full_sync_mask |= sync_mask;
-        if (adc_full_sync_mask == ADC_SYNC_ALL_MASK)
-        {
-            adc_full_sync_mask = 0U;
-            adc_fll_ready_offset = (int32_t)(ADC_LEN / 2U);
-            adc_fll_ready_sample_start = adc_ready_sample_start;
-            __HAL_TIM_DISABLE(&htim8);
-            adc_restart_pending = 1U;
-        }
+        ADC_Flag = 1U;
     }
 }
 /* USER CODE END 4 */

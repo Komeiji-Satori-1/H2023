@@ -20,15 +20,11 @@
 #define STATE_ADC_FS_HZ 1025641.0f
 
 extern uint16_t ADC_C[ADC_LEN];
-extern volatile int32_t adc_ready_offset;
-extern volatile uint64_t adc_ready_sample_start;
 extern SignalInfo A;
 extern SignalInfo B;
 
 extern uint16_t ADC_AD9833_A[ADC_LEN];
 extern uint16_t ADC_AD9833_B[ADC_LEN];
-extern volatile int32_t adc_fll_ready_offset;
-extern volatile uint64_t adc_fll_ready_sample_start;
 
 typedef enum
 {
@@ -50,7 +46,6 @@ static uint16_t adc_frame[STATE_FRAME_LEN];
 static uint16_t adc_fll_c_frame[STATE_FLL_FRAME_LEN];
 static uint16_t adc_fll_a_frame[STATE_FLL_FRAME_LEN];
 static uint16_t adc_fll_b_frame[STATE_FLL_FRAME_LEN];
-static uint64_t adc_frame_sample_start = 0;
 
 uint16_t freq = STATE_DEFAULT_FREQ;
 float vout = STATE_DEFAULT_VOUT;
@@ -67,46 +62,26 @@ static uint16_t State_LimitPhase(uint32_t value)
 
 static uint8_t State_TakeReadyAdcFrame(uint16_t *dst,
                                        uint16_t len,
-                                       uint64_t *sample_start,
                                        uint32_t timeout_ms)
 {
-    uint32_t tick_start;
-    int32_t ready_offset;
-    uint64_t ready_sample_start;
-
-    if ((dst == NULL) || (sample_start == NULL) ||
-        (len != STATE_FRAME_LEN) || (ADC_LEN < (STATE_FRAME_LEN * 2U)))
+    if ((dst == NULL) || (len != STATE_FRAME_LEN) || (ADC_LEN < len))
     {
         return 0;
     }
 
-    tick_start = HAL_GetTick();
-
-    do
+    if (Acquire_All_ADC_Samples_Blocking(timeout_ms) == 0U)
     {
-        __disable_irq();
-        ready_offset = adc_ready_offset;
-        ready_sample_start = adc_ready_sample_start;
-        adc_ready_offset = -1;
-        __enable_irq();
+        return 0;
+    }
 
-        if ((ready_offset == 0) || (ready_offset == (int32_t)STATE_FRAME_LEN))
-        {
-            memcpy(dst, &ADC_C[ready_offset], len * sizeof(uint16_t));
-            *sample_start = ready_sample_start;
-            return 1;
-        }
-    } while ((timeout_ms != 0U) &&
-             ((HAL_GetTick() - tick_start) < timeout_ms));
-
-    return 0;
+    memcpy(dst, ADC_C, len * sizeof(uint16_t));
+    return 1;
 }
 
 static uint8_t State_CopyStableAdcFrame(uint16_t *dst, uint16_t len)
 {
     return State_TakeReadyAdcFrame(dst,
                                    len,
-                                   &adc_frame_sample_start,
                                    STATE_ADC_WAIT_TIMEOUT_MS);
 }
 
@@ -115,27 +90,20 @@ static uint8_t State_TakeReadyFllFrame(uint16_t *c_dst,
                                        uint16_t *b_dst,
                                        uint16_t len)
 {
-    int32_t ready_offset;
-
     if ((c_dst == NULL) || (a_dst == NULL) || (b_dst == NULL) ||
-        (len != STATE_FLL_FRAME_LEN) || (ADC_LEN < (STATE_FRAME_LEN * 2U)))
+        (len != STATE_FLL_FRAME_LEN) || (ADC_LEN < len))
     {
         return 0;
     }
 
-    __disable_irq();
-    ready_offset = adc_fll_ready_offset;
-    adc_fll_ready_offset = -1;
-    __enable_irq();
-
-    if ((ready_offset != 0) && (ready_offset != (int32_t)STATE_FRAME_LEN))
+    if (Acquire_All_ADC_Samples_Blocking(STATE_ADC_WAIT_TIMEOUT_MS) == 0U)
     {
         return 0;
     }
 
-    memcpy(c_dst, &ADC_C[ready_offset], len * sizeof(uint16_t));
-    memcpy(a_dst, &ADC_AD9833_A[ready_offset], len * sizeof(uint16_t));
-    memcpy(b_dst, &ADC_AD9833_B[ready_offset], len * sizeof(uint16_t));
+    memcpy(c_dst, ADC_C, len * sizeof(uint16_t));
+    memcpy(a_dst, ADC_AD9833_A, len * sizeof(uint16_t));
+    memcpy(b_dst, ADC_AD9833_B, len * sizeof(uint16_t));
 
     return 1;
 }
