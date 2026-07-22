@@ -10,11 +10,11 @@
 #define AD9833_FLL_MAX_FREQ_HZ 1000000.0f
 #define AD9833_FLL_LOCK_MIN_BIN 2U
 #define AD9833_FLL_LOCK_MIN_MAG 1.0f
-#define AD9833_FLL_PID_KP 0.5f
-#define AD9833_FLL_PID_KI 0.003f
+#define AD9833_FLL_PID_KP 3.2f
+#define AD9833_FLL_PID_KI 0.06f
 #define AD9833_FLL_PID_KD 0.0f
-#define AD9833_FLL_PID_I_MAX 10.0f
-#define AD9833_FLL_PID_OUT_MAX 100.0f
+#define AD9833_FLL_PID_I_MAX 2.5f
+#define AD9833_FLL_PID_OUT_MAX 500.0f
 #define AD9833_FLL_FREQ_OFFSET_A 0.0f
 #define AD9833_FLL_FREQ_OFFSET_B 0.0f
 
@@ -311,7 +311,7 @@ static void Ad9833Fll_ConfigChannel(uint8_t index,
              AD9833_FLL_PID_KD,
              AD9833_FLL_PID_I_MAX,
              AD9833_FLL_PID_OUT_MAX,
-             0.0f);
+             1.0f);
 }
 
 static void Ad9833Fll_UpdateChannel(uint8_t index,
