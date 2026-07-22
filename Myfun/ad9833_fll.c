@@ -8,8 +8,9 @@
 #define AD9833_FLL_TWO_PI (2.0f * AD9833_FLL_PI)
 #define AD9833_FLL_MIN_FREQ_HZ 1.0f
 #define AD9833_FLL_MAX_FREQ_HZ 1000000.0f
-#define AD9833_FLL_LOCK_MIN_BIN 2U
 #define AD9833_FLL_LOCK_MIN_MAG 1.0f
+#define AD9833_FLL_FREQ_STEP_HZ 5000.0f
+#define AD9833_FLL_FREQ_SNAP_MIN_HZ 5000.0f
 #define AD9833_FLL_PID_KP 3.2f
 #define AD9833_FLL_PID_KI 0.06f
 #define AD9833_FLL_PID_KD 0.0f
@@ -50,6 +51,30 @@ static float Ad9833Fll_LimitFloat(float value, float min_value, float max_value)
     return value;
 }
 
+static float Ad9833Fll_SnapFreq(float freq_hz)
+{
+    float snapped_freq;
+
+    if (freq_hz < AD9833_FLL_FREQ_SNAP_MIN_HZ)
+    {
+        freq_hz = AD9833_FLL_FREQ_SNAP_MIN_HZ;
+    }
+
+    snapped_freq = floorf((freq_hz / AD9833_FLL_FREQ_STEP_HZ) + 0.5f) * AD9833_FLL_FREQ_STEP_HZ;
+
+    if (snapped_freq < AD9833_FLL_FREQ_SNAP_MIN_HZ)
+    {
+        snapped_freq = AD9833_FLL_FREQ_SNAP_MIN_HZ;
+    }
+
+    if (snapped_freq > AD9833_FLL_MAX_FREQ_HZ)
+    {
+        snapped_freq = AD9833_FLL_MAX_FREQ_HZ;
+    }
+
+    return snapped_freq;
+}
+
 static float Ad9833Fll_WrapPi(float phase_rad)
 {
     while (phase_rad > AD9833_FLL_PI)
@@ -63,204 +88,6 @@ static float Ad9833Fll_WrapPi(float phase_rad)
     }
 
     return phase_rad;
-}
-
-static uint32_t Ad9833Fll_FindPeakBin(const float *mag, uint16_t len)
-{
-    uint32_t peak_bin = AD9833_FLL_LOCK_MIN_BIN;
-    float peak_mag = 0.0f;
-    uint32_t i;
-
-    if (mag == 0U)
-    {
-        return 0U;
-    }
-
-    for (i = AD9833_FLL_LOCK_MIN_BIN; i < (uint32_t)(len / 2U); i++)
-    {
-        if (mag[i] > peak_mag)
-        {
-            peak_mag = mag[i];
-            peak_bin = i;
-        }
-    }
-
-    return peak_bin;
-}
-
-static void Ad9833Fll_TopTwoBins(const float *mag, uint16_t len, uint32_t *bin0, uint32_t *bin1)
-{
-    uint32_t i;
-    uint32_t first = 0U;
-    uint32_t second = 0U;
-    float first_mag = 0.0f;
-    float second_mag = 0.0f;
-
-    if ((mag == 0U) || (bin0 == 0U) || (bin1 == 0U))
-    {
-        return;
-    }
-
-    for (i = AD9833_FLL_LOCK_MIN_BIN; i < (uint32_t)(len / 2U); i++)
-    {
-        if (mag[i] > first_mag)
-        {
-            second_mag = first_mag;
-            second = first;
-            first_mag = mag[i];
-            first = i;
-        }
-        else if (mag[i] > second_mag)
-        {
-            second_mag = mag[i];
-            second = i;
-        }
-    }
-
-    if (first > second)
-    {
-        uint32_t temp = first;
-        first = second;
-        second = temp;
-    }
-
-    *bin0 = first;
-    *bin1 = second;
-}
-
-static void Ad9833Fll_SingleBinDft(const uint16_t *adc_buf,
-                                  uint16_t len,
-                                  uint32_t bin,
-                                  FFT_SingleFreqResult_t *result)
-{
-    uint16_t i;
-    float dc = 0.0f;
-    float real = 0.0f;
-    float imag = 0.0f;
-    float sample;
-    float angle_step;
-    float angle;
-    float cos_step;
-    float sin_step;
-    float cos_val;
-    float sin_val;
-
-    if ((adc_buf == 0U) || (result == 0U) || (len == 0U) || (bin >= (uint32_t)(len / 2U)))
-    {
-        return;
-    }
-
-    for (i = 0; i < len; i++)
-    {
-        dc += (float)adc_buf[i];
-    }
-    dc /= (float)len;
-
-    angle_step = (2.0f * AD9833_FLL_PI * (float)bin) / (float)len;
-    cos_step = cosf(angle_step);
-    sin_step = sinf(angle_step);
-    cos_val = 1.0f;
-    sin_val = 0.0f;
-
-    for (i = 0; i < len; i++)
-    {
-        sample = (float)adc_buf[i] - dc;
-        real += sample * cos_val;
-        imag -= sample * sin_val;
-
-        angle = cos_val * cos_step - sin_val * sin_step;
-        sin_val = sin_val * cos_step + cos_val * sin_step;
-        cos_val = angle;
-    }
-
-    result->real = real;
-    result->imag = imag;
-    result->mag = 2.0f * sqrtf(real * real + imag * imag) / (float)len;
-    result->phase = atan2f(real, imag);
-}
-
-static void Ad9833Fll_AnalyseFrame(const uint16_t *frame,
-                                   uint16_t len,
-                                   FFT_SingleFreqResult_t *first,
-                                   FFT_SingleFreqResult_t *second)
-{
-    float mag_buf[AD9833_FLL_LOCK_MIN_BIN + 256U];
-    uint32_t i;
-    uint32_t bin0;
-    uint32_t bin1;
-    FFT_SingleFreqResult_t temp;
-
-    if ((frame == 0U) || (first == 0U) || (second == 0U) || (len == 0U))
-    {
-        return;
-    }
-
-    if (len > 256U)
-    {
-        len = 256U;
-    }
-
-    for (i = 0; i < (uint32_t)(len / 2U); i++)
-    {
-        mag_buf[i] = 0.0f;
-    }
-
-    for (i = AD9833_FLL_LOCK_MIN_BIN; i < (uint32_t)(len / 2U); i++)
-    {
-        Ad9833Fll_SingleBinDft(frame, len, i, &temp);
-        mag_buf[i] = temp.mag;
-    }
-
-    Ad9833Fll_TopTwoBins(mag_buf, len, &bin0, &bin1);
-    if ((bin0 == 0U) || (bin1 == 0U))
-    {
-        memset(first, 0, sizeof(*first));
-        memset(second, 0, sizeof(*second));
-        return;
-    }
-
-    Ad9833Fll_SingleBinDft(frame, len, bin0, first);
-    Ad9833Fll_SingleBinDft(frame, len, bin1, second);
-}
-
-static void Ad9833Fll_AnalysePeakFrame(const uint16_t *frame,
-                                       uint16_t len,
-                                       FFT_SingleFreqResult_t *peak)
-{
-    float mag_buf[AD9833_FLL_LOCK_MIN_BIN + 256U];
-    uint32_t i;
-    uint32_t peak_bin;
-    FFT_SingleFreqResult_t temp;
-
-    if ((frame == 0U) || (peak == 0U) || (len == 0U))
-    {
-        return;
-    }
-
-    if (len > 256U)
-    {
-        len = 256U;
-    }
-
-    for (i = 0; i < (uint32_t)(len / 2U); i++)
-    {
-        mag_buf[i] = 0.0f;
-    }
-
-    for (i = AD9833_FLL_LOCK_MIN_BIN; i < (uint32_t)(len / 2U); i++)
-    {
-        Ad9833Fll_SingleBinDft(frame, len, i, &temp);
-        mag_buf[i] = temp.mag;
-    }
-
-    peak_bin = Ad9833Fll_FindPeakBin(mag_buf, len);
-    if (peak_bin == 0U)
-    {
-        memset(peak, 0, sizeof(*peak));
-        return;
-    }
-
-    Ad9833Fll_SingleBinDft(frame, len, peak_bin, peak);
 }
 
 static uint16_t Ad9833Fll_WaveTypeToAd9833(WaveType type)
@@ -298,7 +125,7 @@ static void Ad9833Fll_ConfigChannel(uint8_t index,
     }
 
     memset(&s_fll[index], 0, sizeof(s_fll[index]));
-    s_fll[index].base_freq_hz = Ad9833Fll_ValidFreq(sig->freq);
+    s_fll[index].base_freq_hz = Ad9833Fll_SnapFreq(Ad9833Fll_ValidFreq(sig->freq));
     s_fll[index].output_freq_hz = s_fll[index].base_freq_hz;
     s_fll[index].freq_corr_hz = 0.0f;
     s_fll[index].freq_offset_hz = (index == 0U) ? AD9833_FLL_FREQ_OFFSET_A : AD9833_FLL_FREQ_OFFSET_B;
@@ -425,11 +252,16 @@ void Ad9833Fll_Task(const uint16_t *c_frame,
         return;
     }
 
-    (void)fs_hz;
     use_len = (len > 256U) ? 256U : len;
-    Ad9833Fll_AnalyseFrame(c_frame, use_len, &ref_a, &ref_b);
-    Ad9833Fll_AnalysePeakFrame(a_feedback_frame, use_len, &fb_a);
-    Ad9833Fll_AnalysePeakFrame(b_feedback_frame, use_len, &fb_b);
+    memset(&ref_a, 0, sizeof(ref_a));
+    memset(&ref_b, 0, sizeof(ref_b));
+    memset(&fb_a, 0, sizeof(fb_a));
+    memset(&fb_b, 0, sizeof(fb_b));
+
+    FFT_SingleFreqDFT_U16(c_frame, use_len, fs_hz, s_fll[0].base_freq_hz, &ref_a);
+    FFT_SingleFreqDFT_U16(c_frame, use_len, fs_hz, s_fll[1].base_freq_hz, &ref_b);
+    FFT_SingleFreqDFT_U16(a_feedback_frame, use_len, fs_hz, s_fll[0].base_freq_hz, &fb_a);
+    FFT_SingleFreqDFT_U16(b_feedback_frame, use_len, fs_hz, s_fll[1].base_freq_hz, &fb_b);
 
     Ad9833Fll_UpdateChannel(0U, &ref_a, &fb_a);
     Ad9833Fll_UpdateChannel(1U, &ref_b, &fb_b);
