@@ -231,6 +231,20 @@ void DMA1_Stream1_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 stream2 global interrupt.
+  */
+void DMA1_Stream2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_adc3);
+  /* USER CODE BEGIN DMA1_Stream2_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream2_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART1 global interrupt.
   */
 void USART1_IRQHandler(void)
@@ -242,20 +256,6 @@ void USART1_IRQHandler(void)
   /* USER CODE BEGIN USART1_IRQn 1 */
 
   /* USER CODE END USART1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles BDMA channel0 global interrupt.
-  */
-void BDMA_Channel0_IRQHandler(void)
-{
-  /* USER CODE BEGIN BDMA_Channel0_IRQn 0 */
-
-  /* USER CODE END BDMA_Channel0_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_adc3);
-  /* USER CODE BEGIN BDMA_Channel0_IRQn 1 */
-
-  /* USER CODE END BDMA_Channel0_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

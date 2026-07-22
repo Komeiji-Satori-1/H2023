@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
-#include "bdma.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -179,7 +178,6 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_ADC2_Init();
-  MX_BDMA_Init();
   MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
